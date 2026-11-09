@@ -227,6 +227,57 @@ input.inp:focus{border-color:#ffd166;box-shadow:0 0 0 3px rgba(255,209,102,.25)}
 #padDead .sub{font-family:Nunito,system-ui;font-size:15px;font-weight:800;margin-top:6px}
 
 #hotbar{gap:3px;max-width:calc(100vw - 540px)}#hotbar .slot{width:49px;font-size:8.5px}#hotbar .slot .ico{width:20px;height:20px}
+
+/* ===== v4: thumb-friendly pad layout (controller + solo) ===== */
+#padBtns{top:auto;bottom:12px;right:12px;grid-template-columns:repeat(3,64px);gap:7px}
+.pb{width:64px;height:58px;font-size:9px}
+#dashBtn{position:absolute;right:236px;bottom:22px;z-index:4;width:84px;height:84px;border-radius:50%;font-weight:900;font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.45),rgba(76,201,240,.35));border:2px solid rgba(255,255,255,.55);box-shadow:0 6px 18px rgba(0,0,0,.4);overflow:hidden;color:#fff}
+#dashBtn span{font-size:24px;line-height:1}
+#dashBtn i{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(0,0,0,.45);pointer-events:none}
+#dashBtn.cool{opacity:.75}#dashBtn:active{transform:scale(.93)}
+#ctxBtn{right:12px;bottom:146px}
+#pauseBtn{width:38px!important;height:34px!important;border-radius:10px!important;font-size:16px!important}
+#buildTray{top:58px;right:12px}
+#buildActs{bottom:150px}
+.hintR{right:330px}
+#pauseMenu{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:rgba(0,0,0,.55)}
+#pauseMenu .card{width:min(360px,92vw);padding:18px;display:flex;flex-direction:column;gap:9px;text-align:center}
+#pauseMenu h2{margin:0 0 4px;font-size:30px}#pauseMenu .btn{justify-content:center}
+#pauseMenu .row2{display:flex;gap:8px}#pauseMenu .row2 .btn{flex:1;font-size:13px;padding:10px}
+@media (max-height:420px){.pb{width:58px;height:52px}#padBtns{grid-template-columns:repeat(3,58px);gap:6px}#dashBtn{right:214px;width:76px;height:76px}#ctxBtn{bottom:128px}}
+/* ===== v4: solo on phone — canvas visible under transparent controls ===== */
+body.touchsolo #pad{background:none;pointer-events:none;padding:0}
+body.touchsolo #pad .zone,body.touchsolo #pad button,body.touchsolo #pad .top,body.touchsolo #buildTray,body.touchsolo #buildActs,body.touchsolo #padSheet,body.touchsolo #padMap,body.touchsolo #padPerk,body.touchsolo #padMsg .toast{pointer-events:auto}
+body.touchsolo #pad .top{background:rgba(10,20,15,.45);left:8px;right:8px;top:6px;padding:4px 8px}
+body.touchsolo .pb{background:linear-gradient(145deg,rgba(255,255,255,.22),rgba(255,255,255,.06));opacity:.92}
+body.touchsolo .hintL,body.touchsolo .hintR{opacity:.25}
+body.touchsolo #hud #board,body.touchsolo #hud #res,body.touchsolo #hud #mini,body.touchsolo #hud #hudBtns,body.touchsolo #hud #roomChip,body.touchsolo #hud #toasts,body.touchsolo #hud #kbStats,body.touchsolo #hud #hotbar,body.touchsolo #hud #kbInfo,body.touchsolo #camChip{display:none!important}
+body.touchsolo #wavePanel{top:52px;left:8px;padding:4px 10px!important;transform-origin:left top;transform:scale(.85)}
+body.touchsolo #coreBox{top:52px;width:min(240px,30vw)!important;padding:4px 8px!important}
+body.touchsolo #intel{top:104px;left:8px;width:min(300px,40vw)!important;font-size:11px!important;transform-origin:left top;transform:scale(.9)}
+body.touchsolo #bossBar{top:92px}
+body.touchsolo #banner{top:22%}body.touchsolo #banner .big{font-size:34px}
+body.touchsolo #padMsg{top:96px}
+body.touchsolo #perkPick{display:none!important}
+body.touchsolo #padDead{background:rgba(80,0,10,.35)}
+
+/* v4 polish: keep the play area (screen centre) clear */
+#buildActs{bottom:12px;gap:6px}
+#buildActs .btn{padding:8px 12px;font-size:13px;border-radius:14px}
+#placeBtn{font-size:15px!important;padding:8px 18px!important}
+body.touchsolo #buildActs{left:auto;right:232px;transform:none;bottom:118px}
+body.touchsolo #padMsg{top:50px;left:auto;right:10px;transform:none;align-items:flex-end;max-width:46vw}
+body.touchsolo #padMsg .toast{font-size:11px;padding:4px 9px;background:rgba(0,0,0,.55)}
+body.touchsolo #ctxBtn{font-size:11px;padding:7px 10px;max-width:220px}
+body.touchsolo #ctxBtn .gi{width:24px;height:24px}
+.pb .cnt{font-size:9px;opacity:.75}
+
+body.touchsolo #buildActs{right:12px;bottom:142px;left:auto;transform:none}
+body.touchsolo #buildActs .btn{padding:6px 9px}
+body.touchsolo #pSell{font-size:0;gap:0}
+body.touchsolo #placeBtn{padding:6px 14px!important;font-size:14px!important}
+body.touchsolo #placeBtn .gi{display:none}
+body.touchsolo #placeWhy{max-width:120px}
 </style></head><body>
 <canvas id="cv"></canvas>
 
@@ -328,6 +379,7 @@ input.inp:focus{border-color:#ffd166;box-shadow:0 0 0 3px rgba(255,209,102,.25)}
   <div id="padMap" class="hidden"><canvas id="mapCv"></canvas><div class="mapBar"><span>Ketuk peta = <b>PING</b> untuk tim</span><button class="btn" id="pingMe">📍 Posisiku</button><button class="btn" id="pingHelp">🆘 Tolong</button><button class="btn primary" id="mapClose">Tutup</button></div></div>
 </div>
 <div id="rotate"><div><div style="font-size:60px">📱↻</div><h2 class="title">Putar HP ke landscape</h2><p>Controller lebih nyaman dipakai menyamping.</p><button class="btn" onclick="this.closest('#rotate').style.display='none'">Tetap pakai portrait</button></div></div>
+<div id="pauseMenu" class="hidden"></div>
 <div id="modal" class="hidden"></div>
 
 <script>
@@ -1151,6 +1203,12 @@ class Game {
       case 'autoeat': p.autoEat = !!a.v; break;
       case 'auto': p.auto = !!a.v; say(p.auto ? 'Auto-serang & auto-tambang ON' : 'Auto OFF — bidik manual', 'info'); break;
       case 'up': this.upgrade(p, a.k, a.w); break;
+      case 'dash': {
+        if (p.dead || p.down || (p.dashCd || 0) > 0) return;
+        let dx = p.input.mx || 0, dy = p.input.my || 0; if (Math.hypot(dx, dy) < .2) { dx = Math.cos(p.ang); dy = Math.sin(p.ang); }
+        const l = Math.hypot(dx, dy) || 1; p.dashVx = dx / l * 620; p.dashVy = dy / l * 620; p.dashT = .2; p.dashCd = 2.2; p.invT = Math.max(p.invT || 0, .35);
+        this.emit({ e: 's', n: 'swing', x: p.x, y: p.y }); this.emit({ e: 'fx', k: 'dash', x: p.x, y: p.y + 12 }); break;
+      }
       case 'ping': { const x = clamp(+a.x || p.x, 0, WORLD), y = clamp(+a.y || p.y, 0, WORLD); this.emit({ e: 'ping', x: Math.round(x), y: Math.round(y), c: p.color, n: p.name, k: a.k || 'look' }); this.emit({ e: 's', n: 'ping' }); break; }
     }
   }
@@ -1226,7 +1284,7 @@ class Game {
       else if (nb.type !== 'lmine') { if (nb.tier >= 6) why = 'MAX'; else if (nb.tier >= this.coreTier) why = 'Upgrade Generator dulu'; else cost = this.costOf(nb.type, nb.tier + 1); }
       nbi = { k: nb.type, n: BT[nb.type].name, t: nb.tier, hp: Math.round(nb.hp), max: Math.round(nb.max), cost, ok: cost ? this.canPay(cost) : false, why, rep: p.repairing === nb.id };
     }
-    return { t: 'me', hp: Math.ceil(p.hp), max: p.max, hu: Math.round(p.hunger), am: Math.floor(p.ammo), weps: p.weps, wi: p.wi, wlv: p.wlv, up: p.up, rs: this.research, drone: p.drone, auto: p.auto, items: p.items, isel: p.itemSel, bsel: p.buildSel, res: RES.map(k => Math.floor(this.res[k])), wv: this.wave, ph: this.phase, pt: Math.round(this.phaseT), dl: Math.round(this.dayLen), pc: p.perkChoice, dead: p.dead, down: p.down, dT: Math.ceil(p.downT), rev: Math.round(p.rev / 2.5 * 100), rt: Math.ceil(p.respawnT || 0), ct: this.coreTier, gh: p.ghost ? (p.ghost.ok ? 1 : 0) : -1, ghw: p.ghost && !p.ghost.ok ? p.ghost.why : '', kills: p.kills, tk: p.towerKills, sc: Math.round(p.score), streak: p.streak, color: p.color, name: p.name, adr: p.adrenT > 0, arch: this.teamPerks.arch || 0, nb: nbi, seed: this.seed };
+    return { t: 'me', hp: Math.ceil(p.hp), max: p.max, hu: Math.round(p.hunger), am: Math.floor(p.ammo), weps: p.weps, wi: p.wi, wlv: p.wlv, up: p.up, rs: this.research, drone: p.drone, auto: p.auto, items: p.items, isel: p.itemSel, bsel: p.buildSel, res: RES.map(k => Math.floor(this.res[k])), wv: this.wave, ph: this.phase, pt: Math.round(this.phaseT), dl: Math.round(this.dayLen), pc: p.perkChoice, dead: p.dead, down: p.down, dT: Math.ceil(p.downT), rev: Math.round(p.rev / 2.5 * 100), rt: Math.ceil(p.respawnT || 0), ct: this.coreTier, gh: p.ghost ? (p.ghost.ok ? 1 : 0) : -1, ghw: p.ghost && !p.ghost.ok ? p.ghost.why : '', kills: p.kills, tk: p.towerKills, sc: Math.round(p.score), streak: p.streak, color: p.color, name: p.name, adr: p.adrenT > 0, arch: this.teamPerks.arch || 0, nb: nbi, seed: this.seed, dcd: Math.round((p.dashCd || 0) * 10) / 10 };
   }
   // ---------- flow field (Dijkstra toward core; walls cost by HP so horde picks the weakest wall) ----------
   computeFlow() {
@@ -1394,8 +1452,10 @@ class Game {
       p.wep = p.weps[p.wi];
       const inp = p.input; let mx = inp.mx || 0, my = inp.my || 0; const ml = Math.hypot(mx, my); if (ml > 1) { mx /= ml; my /= ml; }
       const spd = 175 * (1 + .12 * this.perkV(p, 'swift')) * (1 + .06 * p.up.speed) * (p.down ? .3 : 1) * (p.adrenT > 0 ? 1.35 : 1) * (p.hunger <= 0 ? .8 : 1);
-      p.vx = lerp(p.vx, mx * spd, Math.min(1, dt * 14)); p.vy = lerp(p.vy, my * spd, Math.min(1, dt * 14));
-      p.x = clamp(p.x + p.vx * dt, 20, WORLD - 20); p.y = clamp(p.y + p.vy * dt, 20, WORLD - 20); p.mv = Math.hypot(p.vx, p.vy) / spd;
+      p.dashCd = Math.max(0, (p.dashCd || 0) - dt);
+      if (p.dashT > 0) { p.dashT -= dt; p.vx = p.dashVx; p.vy = p.dashVy; if (Math.random() < .5) this.emit({ e: 'fx', k: 'dash', x: p.x, y: p.y + 12 }); }
+      else { p.vx = lerp(p.vx, mx * spd, Math.min(1, dt * 14)); p.vy = lerp(p.vy, my * spd, Math.min(1, dt * 14)); }
+      p.x = clamp(p.x + p.vx * dt, 20, WORLD - 20); p.y = clamp(p.y + p.vy * dt, 20, WORLD - 20); p.mv = Math.min(1.5, Math.hypot(p.vx, p.vy) / spd);
       // collide with trees/rocks
       this.collideNodes(p, 16);
       // aim
@@ -1725,6 +1785,7 @@ const FX = {
       case 'revive': this.burst(x, y, 16, '#7cff00', 100, .9, 5, -120); this.rings.push({ x, y, r: 5, mr: 50, t: 0, c: 'rgba(124,255,0,.8)' }); break;
       case 'zap': this.zaps.push({ pts: e.pts, t: .18 }); const l = e.pts[e.pts.length - 1]; this.light(l[0], l[1], 160, .15, '#b388ff'); break;
       case 'hitb': this.burst(x, y, 3, '#c9a66b', 120, .3, 3, 200); break;
+      case 'dash': this.burst(x, y, 4, 'rgba(230,220,200,.8)', 70, .35, 5, -30); break;
       case 'drill': this.burst(x, y, 3, pick(['#8b5e34', '#adb5bd', '#e9a46b']), 90, .4, 3, 200); break;
       case 'repair': this.burst(x, y - 10, 4, '#ffd166', 90, .5, 3, -60); this.rings.push({ x, y, r: 6, mr: 26, t: 0, c: 'rgba(255,209,102,.7)', w: 2 }); break;
       case 'drop': this.rings.push({ x, y, r: 120, mr: 0, t: 0, c: 'rgba(255,255,255,.9)', w: 4, rev: 1 }); break;
@@ -1779,7 +1840,7 @@ class Renderer {
     if (this.free) { const c = this.cam, f = this.free; c.x = lerp(c.x, f.x, Math.min(1, dt * 12)); c.y = lerp(c.y, f.y, Math.min(1, dt * 12)); c.z = lerp(c.z, f.z, Math.min(1, dt * 8)); FX.cam = c; return; }
     const ps = [...V.players.values()].filter(p => !p.dead);
     let tx = CORE_X, ty = CORE_Y, tz;
-    const base = clamp(Math.min(innerWidth, innerHeight * 1.6) / 1250, .5, 1.25);
+    const base = this.touch ? clamp(Math.min(innerHeight / 560, innerWidth / 900), .5, 1.15) : clamp(Math.min(innerWidth, innerHeight * 1.6) / 1250, .5, 1.25);
     const f = follow && V.players.get(follow);
     if (f) { tx = f.x; ty = f.y; tz = base * 1.08; }
     else if (ps.length) {
@@ -2442,7 +2503,8 @@ function initMenu() {
   $('#iName').value = store.get('nh_name', ''); const rc = QS.get('room'); if (rc) $('#iCode').value = rc.toUpperCase();
   if (rc || IS_TOUCH) { $('#menuCol').prepend($('#fPad')); $('#menu').classList.add('joinmode'); if (!$('#iName').value) setTimeout(() => $('#iName').focus(), 300); }
   $('#bHost').onclick = () => { SFX.init(); startHost(); };
-  $('#bSolo').onclick = () => { SFX.init(); startSolo(); };
+  if (IS_TOUCH) { const b = $('#bSolo'); b.innerHTML = `${gicon('phone')}<span>Main Solo di HP<small>Layar + kontrol sentuh di satu HP</small></span>`; b.classList.add('green'); $('#menuCol').insertBefore(b, $('#fPad').nextSibling); }
+  $('#bSolo').onclick = () => { SFX.init(); IS_TOUCH ? startSoloTouch() : startSolo(); };
   $('#bHelp').onclick = showHelp;
   const getCN = () => { const code = $('#iCode').value.trim().toUpperCase(), name = $('#iName').value.trim() || 'Player'; if (code.length < 5) { Dlg.fire({ icon: 'warning', title: 'Kode room?', text: 'Masukkan 5 huruf kode room dari laptop host.' }); return null; } store.set('nh_name', name); return { code, name }; };
   $('#bPad').onclick = () => { const o = getCN(); if (o) { SFX.init(); startPad(o.code, o.name); } };
@@ -2475,7 +2537,7 @@ function showHelp() {
     <b>🌙 Malam:</b> horde datang dari tepi map. Wave tidak terbatas, boss tiap 5 wave, Blood Moon tiap 7 wave.<br>
     <b>🧠 AI Director:</b> horde membaca kebiasaan tim (banyak tembok, bergerombol, senjata favorit...) lalu menyesuaikan jenis zombie, sisi serangan, dan <b>bermutasi</b> melawan damage yang paling sering kalian pakai.<br>
     <b>⭐ Perk:</b> tiap pagi tiap pemain memilih 1 dari 3 perk.<br>
-    <b>📱 HP (mudah):</b> cukup gerakkan stik kiri. <b>AUTO</b> menyerang zombie terdekat & menambang otomatis. Tombol: Senjata, Item (tahan = ganti item), Bangun, Upgrade, Peta (ketuk = ping ke tim).<br>
+    <b>📱 HP (mudah):</b> cukup gerakkan stik kiri. <b>AUTO</b> menyerang zombie terdekat & menambang otomatis. <b>DASH</b> untuk menghindar (kebal sesaat). Tombol: Senjata ⇄, Item (ketuk = pakai, tahan = ganti), Bangun, Upgrade, Peta (ketuk = ping). <b>Main Solo di HP</b>: menu upgrade & peta otomatis menjeda game, tombol ⏸ untuk pause.<br>
     <b>⬆ Upgrade:</b> senjata (Lv1-5), karakter (HP, lari, tambang, armor, drone), riset base, dan tier bangunan — dekati bangunan lalu tekan tombol oranye.<br>
     <b>🔧 Otomatis:</b> berdiri dekat bangunan rusak = diperbaiki (pakai kayu). Teman jatuh? Berdiri di dekatnya untuk menolong.<br>
     <b>⌨ Keyboard:</b> WASD gerak • mouse bidik/klik serang • 1-9,0,-,= bangun • Klik kanan/Esc batal • Q senjata • F item • T ganti item • U upgrade bangunan • G menu upgrade • X jual • P ping • M musik • N suara.<br>
@@ -2520,9 +2582,9 @@ function renderLobby() {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function restartHost() {
-  const old = App.game, keep = [...old.players.values()].map((p, i) => ({ id: p.id, name: p.name, i }));
+  const old = App.game, keep = [...old.players.values()].map((p, i) => ({ id: p.id, name: p.name, i, isPad: p.isPad, auto: p.auto }));
   FX.parts.length = 0; FX.projs.clear(); FX.decals.length = 0; FX.texts.length = 0; FX.pings.length = 0; FX.bossName = null; if (App.R) App.R.free = null;
-  const g = new Game((Math.random() * 1e9) | 0); for (const k of keep) g.addPlayer(k.id, k.name, k.i); g.ev = [];
+  const g = new Game((Math.random() * 1e9) | 0); for (const k of keep) { const np = g.addPlayer(k.id, k.name, k.i); np.isPad = !!k.isPad; np.auto = k.auto !== false; } g.ev = [];
   App.game = g; App.view = g;
   if (App.net) { App.net.g = g; App.net.lastBver = -1; App.net.rosterDirty = true; App.net.broadcast('view', { t: 'welcome', seed: g.seed, code: App.net.code }); }
   $('#intel').classList.add('hidden'); $('#bossBar').classList.add('hidden'); App.started = true; SFX.play('day');
@@ -2553,12 +2615,13 @@ function loop() {
   if (App.mode === 'host' || App.mode === 'solo') {
     const g = App.game;
     if (App.localId) pollKeyboard();
+    if (App.touch) { App.started = !App.paused && $('#padSheet').classList.contains('hidden') && !PAD.mapOpen; touchSoloTick(); }
     if (App.started) { acc += dt; let n = 0; while (acc >= 1 / 60 && n < 3) { const st = acc >= 2 / 60 ? 1 / 30 : 1 / 60; g.update(st); acc -= st; n++; } if (n === 3) acc = 0; }
     const ev = g.ev; g.ev = [];
-    handleEvents(ev.filter(e => !e.pid || e.pid === App.localId));
+    handleEvents(ev.filter(e => !e.pid || e.pid === App.localId || (App.touch && e.pid === 'local')));
     if (App.net) App.net.tick(dt, ev);
   } else if (App.mode === 'view') { V.smooth(dt); }
-  let follow = null;
+  let follow = App.touch ? 'local' : null;
   if (App.mode === 'view' && App.followName) { for (const p of V.players.values()) if (p.name.toLowerCase() === App.followName.toLowerCase()) follow = p.id; }
   App.follow = follow;
   App.R.updateCam(V, dt, follow); FX.update(dt);
@@ -2571,7 +2634,9 @@ function handleEvents(E) {
   const V = App.view, clean = $('#hud').classList.contains('clean');
   for (const e of E) {
     FX.handle(e, V);
-    if (e.e === 'msg') { if (!clean || e.cls === 'bad' || e.cls === 'good' && !e.pid) toast(e.text, e.cls); }
+    if (e.e === 'msg') { if (App.touch) padToast(e.text, e.cls); else if (!clean || e.cls === 'bad' || e.cls === 'good' && !e.pid) toast(e.text, e.cls); }
+    else if (App.touch && e.e === 'hurt') { vib(35); FX.shake = Math.max(FX.shake, 3); }
+    else if (App.touch && e.e === 'sw') vib(6);
     else if (e.e === 'phase') { banner(e.ph === 'night' ? `MALAM ${e.wave}` : 'FAJAR TIBA', e.ph === 'night' ? 'Bertahanlah sampai pagi!' : 'Pilih perk, upgrade & perkuat base'); }
     else if (e.e === 'intel') showIntel(e);
     else if (e.e === 'boss') { if (e.name) banner('⚠ ' + e.name + ' ⚠', 'Boss telah tiba'); }
@@ -2581,7 +2646,7 @@ function handleEvents(E) {
 }
 function toast(text, cls = 'info', box = '#toasts') {
   const b = $(box); if (!b) return; const d = document.createElement('div'); d.className = 'toast ' + cls; d.innerHTML = text; b.prepend(d);
-  const max = box === '#toasts' && $('#hud').classList.contains('clean') ? 3 : 5;
+  const max = box === '#padMsg' ? 3 : box === '#toasts' && $('#hud').classList.contains('clean') ? 3 : 5;
   while (b.children.length > max) b.lastChild.remove(); setTimeout(() => { d.style.transition = 'opacity .4s'; d.style.opacity = 0; setTimeout(() => d.remove(), 400); }, 3800);
 }
 let bannerTO = null;
@@ -2604,10 +2669,10 @@ function gameOverDlg(e) {
 function updateHUD(V) {
   const night = V.phase === 'night', boss = V.zombies.find(z => z.boss);
   const dayLeft = V.phase === 'day' ? V.dayLen - V.phaseT : 99;
-  SFX.setMood({ night: night || !!boss, inten: clamp(V.zombies.length / 70, 0, 1), boss: !!boss, dayLeft: (App.mode === 'view' ? V.started : App.started) ? dayLeft : 99, blood: V.bloodMoon });
+  SFX.setMood({ night: night || !!boss, inten: clamp(V.zombies.length / 70, 0, 1), boss: !!boss, dayLeft: (App.mode === 'view' ? V.started : (App.started || App.touch)) ? dayLeft : 99, blood: V.bloodMoon });
   setHTML($('#waveNum'), 'WAVE ' + V.wave);
   setHTML($('#phaseIco'), gicon(night ? 'moon' : 'sun', 22));
-  if (V.phase === 'day') { const left = Math.max(0, Math.ceil(dayLeft)); setHTML($('#phaseTxt'), ((App.mode === 'view' ? V.started : App.started) ? `Siang • malam dalam <b>${left}s</b>` : 'Menunggu host mulai...') + (V.bloodMoon ? ' • <span style="color:#ff4d6d">BLOOD MOON</span>' : '')); $('#dayBar>i').style.left = (clamp(V.phaseT / V.dayLen, 0, 1) * 70) + '%'; }
+  if (V.phase === 'day') { const left = Math.max(0, Math.ceil(dayLeft)); setHTML($('#phaseTxt'), (App.paused || (App.touch && !App.started) ? '⏸ Dijeda' : (App.mode === 'view' ? V.started : App.started) ? `Siang • malam dalam <b>${left}s</b>` : 'Menunggu host mulai...') + (V.bloodMoon ? ' • <span style="color:#ff4d6d">BLOOD MOON</span>' : '')); $('#dayBar>i').style.left = (clamp(V.phaseT / V.dayLen, 0, 1) * 70) + '%'; }
   else if (night) { setHTML($('#phaseTxt'), `MALAM • <b>${V.zombies.length}</b> zombie${V.fog ? ' • 🌫' : ''}${V.bloodMoon ? ' • 🩸' : ''}`); $('#dayBar>i').style.left = (70 + clamp(V.phaseT / 80, 0, 1) * 29) + '%'; }
   if (V.phase === 'over') setHTML($('#phaseTxt'), '<b style="color:#ff4d6d">GAME OVER</b>');
   setHTML($('#mutRow'), Object.entries(V.mut || {}).map(([k, v]) => `<span title="${MUT_NAME[k]}">${MUT_NAME[k].split(' (')[0]} ${'I'.repeat(v)}</span>`).join(''));
@@ -2756,6 +2821,7 @@ function renderSheet(el, me, act, onClose) {
 }
 
 // ================= PHONE CONTROLLER (simple) =================
+let PADIO = { act() { }, map() { } };
 const PAD = { me: null, input: { mx: 0, my: 0, ax: 0, ay: 0, f: false }, touches: {}, buildOpen: false, map: null, mapOpen: false };
 function startPad(code, name) {
   App.mode = 'pad'; $('#menu').classList.add('hidden'); $('#cv').style.display = 'none';
@@ -2772,13 +2838,14 @@ function startPad(code, name) {
     status: (st, n, mode) => { const was = PAD.status; PAD.status = st; if (st === 'ok' && was !== 'ok' && PAD.me) padToast('Tersambung kembali' + (mode === 'relay' ? ' (mode relay)' : ''), 'good'); if (st === 'lost') { padToast('Koneksi terputus, menyambung ulang...', 'bad'); vib(100); } else if (st === 'slow') padToast(netTip(), 'warn'); padNetChip(); }
   };
   App.net = new PadNet(code, name, h);
+  PADIO = { act: a => App.net.act(a), map: () => App.net.c.send({ t: 'map' }) };
   App.net.c.h.data = (orig => d => { if (d.t === 'map') { PAD.map = d; drawPadMap(); } else orig(d); })(App.net.c.h.data);
   setInterval(padNetChip, 1000);
   setupSticks(); setupPadButtons();
   setInterval(() => App.net.sendInput(PAD.input), 33);
-  setInterval(() => { if (PAD.mapOpen) App.net.c.send({ t: 'map' }); }, 600);
+  setInterval(() => { if (PAD.mapOpen) PADIO.map(); }, 600);
 }
-function padNetChip() { const el = $('#padNet'); if (!el) return; const ok = PAD.status === 'ok'; el.innerHTML = ok ? `${icon('wifi', 14)}${App.net.mode === 'relay' ? 'R·' : ''}${App.net.rtt}ms` : `<span style="color:#ffd43b">${icon('wifi', 14)}…</span>`; }
+function padNetChip() { const el = $('#padNet'); if (!el) return; if (App.touch) { el.innerHTML = ''; return; } const ok = PAD.status === 'ok'; el.innerHTML = ok ? `${icon('wifi', 14)}${App.net.mode === 'relay' ? 'R·' : ''}${App.net.rtt}ms` : `<span style="color:#ffd43b">${icon('wifi', 14)}…</span>`; }
 function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } }
 function padToast(t, c = 'info') { toast(t, c, '#padMsg'); }
 function setupSticks() {
@@ -2805,12 +2872,16 @@ function setupSticks() {
   addEventListener('mouseup', () => { if (mouseSide) { end({ identifier: 'm' }); mouseSide = null; } });
 }
 function setupPadButtons() {
-  const act = a => { SFX.play('click'); vib(15); App.net.act(a); };
-  $('#padBtns').innerHTML = `<button class="pb" id="pbA"></button><button class="pb" id="pbM">${gicon('map', 20)}PETA</button><button class="pb big" id="pbW"></button><button class="pb big" id="pbI"></button><button class="pb" id="pbB">${gicon('hammer', 20)}BANGUN</button><button class="pb" id="pbU">${gicon('up', 20)}UPGRADE</button>`;
+  const act = a => { SFX.play('click'); vib(15); PADIO.act(a); };
+  $('#padBtns').innerHTML = `<button class="pb" id="pbA"></button><button class="pb" id="pbM">${gicon('map', 20)}PETA</button><button class="pb" id="pbU">${gicon('up', 20)}UPGRADE</button><button class="pb" id="pbI"></button><button class="pb" id="pbW"></button><button class="pb" id="pbB">${gicon('hammer', 20)}BANGUN</button>`;
+  if (!$('#dashBtn')) { const d = document.createElement('button'); d.id = 'dashBtn'; d.innerHTML = '<span>💨</span>DASH<i></i>'; $('#pad').appendChild(d); }
+  if (!$('#pauseBtn')) { const pb = document.createElement('button'); pb.id = 'pauseBtn'; pb.className = 'pb'; pb.innerHTML = '⏸'; $('#pad .top').appendChild(pb); }
   const top = $('#pad .top'); if (!$('#padNet')) { const n = document.createElement('div'); n.id = 'padNet'; n.className = 'stat'; top.appendChild(n); const sb = document.createElement('button'); sb.id = 'padSnd'; sb.className = 'pb'; sb.style.cssText = 'width:38px;height:34px;border-radius:10px'; top.appendChild(sb); }
   const sndUpd = () => $('#padSnd').innerHTML = icon(SFX.sfxOn ? 'speaker' : 'mute', 18); sndUpd();
   const tap = (el, fn) => { el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fn(e); }, { passive: false }); el.addEventListener('click', fn); };
   tap($('#pbA'), () => act({ a: 'auto', v: !(PAD.me && PAD.me.auto) }));
+  tap($('#dashBtn'), () => { act({ a: 'dash' }); vib(25); });
+  tap($('#pauseBtn'), () => openPause());
   tap($('#pbW'), () => act({ a: 'wep' }));
   // item: tap = use, hold = switch item
   const ib = $('#pbI'); let holdT = null, held = false;
@@ -2818,8 +2889,8 @@ function setupPadButtons() {
   ib.addEventListener('touchend', e => { e.preventDefault(); clearTimeout(holdT); if (!held) act({ a: 'use' }); });
   ib.addEventListener('click', () => act({ a: 'use' })); ib.addEventListener('contextmenu', e => { e.preventDefault(); act({ a: 'item' }); });
   tap($('#pbB'), () => { PAD.buildOpen = !PAD.buildOpen; if (!PAD.buildOpen) act({ a: 'build', k: null }); $('#padSheet').classList.add('hidden'); padRender(PAD.me, true); });
-  tap($('#pbU'), () => { const el = $('#padSheet'); el.classList.toggle('hidden'); el._h = null; el._sig = null; PAD.buildOpen = false; App.net.act({ a: 'build', k: null }); padRender(PAD.me, true); });
-  tap($('#pbM'), () => { PAD.mapOpen = true; $('#padMap').classList.remove('hidden'); App.net.c.send({ t: 'map' }); setTimeout(drawPadMap, 50); });
+  tap($('#pbU'), () => { const el = $('#padSheet'); el.classList.toggle('hidden'); el._h = null; el._sig = null; PAD.buildOpen = false; PADIO.act({ a: 'build', k: null }); padRender(PAD.me, true); });
+  tap($('#pbM'), () => { PAD.mapOpen = true; $('#padMap').classList.remove('hidden'); PADIO.map(); setTimeout(drawPadMap, 50); });
   tap($('#mapClose'), () => { PAD.mapOpen = false; $('#padMap').classList.add('hidden'); });
   tap($('#pingMe'), () => { act({ a: 'ping' }); padToast('📍 Ping posisi dikirim', 'good'); });
   tap($('#pingHelp'), () => { act({ a: 'ping', k: 'help' }); padToast('🆘 Minta tolong dikirim', 'good'); });
@@ -2853,8 +2924,9 @@ function padRender(d, force) {
   setHTML($('#padPhase'), d.ph === 'night' ? `🌙 W${d.wv}` : `☀ ${d.started === false ? '—' : Math.max(0, d.dl - d.pt) + 's'}`);
   const w = WT[d.weps[d.wi]], lv = (d.wlv && d.wlv[d.weps[d.wi]]) || 0;
   setHTML($('#pbA'), gicon('auto', 20) + (d.auto ? 'AUTO ON' : 'AUTO OFF')); $('#pbA').classList.toggle('on', !!d.auto); $('#pbA').classList.toggle('off', !d.auto);
-  setHTML($('#pbW'), gicon(WEP_ICON[d.weps[d.wi]], 22) + `<span>${w.name}${lv ? ' Lv' + lv : ''}</span><span class="cnt">ganti ⇄</span>`);
-  setHTML($('#pbI'), d.isel ? gicon(d.isel, 22) + `<span>${ITEM_NAMES[d.isel]} x${d.items[d.isel] || 0}</span><span class="cnt">tahan = ganti</span>` : gicon('medkit', 22) + '<span>Item kosong</span>');
+  setHTML($('#pbW'), gicon(WEP_ICON[d.weps[d.wi]], 20) + `<span>${w.name.split(' ')[0]}${lv ? ' ' + lv : ''} ⇄</span>`);
+  setHTML($('#pbI'), d.isel ? gicon(d.isel, 20) + `<span>${ITEM_NAMES[d.isel]} ${d.items[d.isel] || 0}</span>` : gicon('medkit', 20) + '<span>Kosong</span>');
+  const db = $('#dashBtn'); if (db) { const cd = d.dcd || 0; db.classList.toggle('cool', cd > 0); db.querySelector('i').style.height = (cd / 2.2 * 100) + '%'; }
   $('#pbB').classList.toggle('on', PAD.buildOpen); $('#pbU').classList.toggle('on', !$('#padSheet').classList.contains('hidden'));
   // contextual upgrade for the nearest building
   const cb = $('#ctxBtn'), nb = d.nb, show = nb && !d.down && !d.dead && !PAD.buildOpen;
@@ -2866,10 +2938,10 @@ function padRender(d, force) {
     const m = 1 - .12 * (d.arch || 0);
     const tsig = [d.bsel, d.wv, d.arch].join(); if (tray._sig !== tsig) { tray._sig = tsig; tray.innerHTML = BT_ORDER.map(k => { const b = BT[k], lock = d.wv < b.unlock, c = {}; for (const r in b.c) c[r] = Math.ceil(b.c[r] * m); return `<div class="slot ${d.bsel === k ? 'sel' : ''} ${lock ? 'lock' : ''}" data-b="${k}" data-cost='${JSON.stringify(c)}'>${icon(BLD_ICON[k], 26)}<div>${b.name}</div><div class="cost">${lock ? '🔒W' + b.unlock : Object.entries(c).map(([r, v]) => v + r[0].toUpperCase()).join(' ')}</div></div>`; }).join(''); }
     tray.querySelectorAll('[data-cost]').forEach(el => el.classList.toggle('poor', !canPayRes(d, JSON.parse(el.dataset.cost))));
-    if (!tray._bound) { tray._bound = true; const f = e => { const el = e.target.closest('.slot'); if (!el) return; e.preventDefault(); SFX.play('click'); vib(10); const cur = PAD.me && PAD.me.bsel; App.net.act({ a: 'build', k: cur === el.dataset.b ? null : el.dataset.b }); }; tray.addEventListener('click', f); }
+    if (!tray._bound) { tray._bound = true; const f = e => { const el = e.target.closest('.slot'); if (!el) return; e.preventDefault(); SFX.play('click'); vib(10); const cur = PAD.me && PAD.me.bsel; PADIO.act({ a: 'build', k: cur === el.dataset.b ? null : el.dataset.b }); }; tray.addEventListener('click', f); }
     $('#placeBtn').style.opacity = d.bsel ? (d.gh === 1 ? 1 : .55) : .35; setHTML($('#placeWhy'), d.bsel ? (d.gh === 1 ? BT[d.bsel].name + ' — arahkan dengan gerak' : d.ghw || '') : 'Pilih bangunan dulu');
   }
-  const sh = $('#padSheet'); if (!sh.classList.contains('hidden')) renderSheet(sh, d, a => { App.net.act(a); }, () => { sh.classList.add('hidden'); padRender(PAD.me, true); });
+  const sh = $('#padSheet'); if (!sh.classList.contains('hidden')) renderSheet(sh, d, a => { PADIO.act(a); }, () => { sh.classList.add('hidden'); padRender(PAD.me, true); });
   // death / downed overlay
   const dd = $('#padDead'); dd.classList.toggle('hidden', !d.dead && !d.down);
   if (d.dead) setHTML(dd, `<div>💀 TUMBANG<div class="sub">Respawn ${d.rt}s</div></div>`);
@@ -2877,8 +2949,49 @@ function padRender(d, force) {
   dd.style.background = d.down ? 'rgba(80,0,30,.45)' : 'rgba(80,0,10,.55)'; dd.style.pointerEvents = d.down ? 'none' : 'auto';
   // perks
   const pk = $('#padPerk');
-  if (d.pc) { const key = d.pc.join(); if (pk.dataset.k !== key) { pk.dataset.k = key; pk.innerHTML = `<div style="width:100%;text-align:center;font-family:'Lilita One','Arial Black',sans-serif;font-size:22px">⭐ PILIH PERK</div>` + d.pc.map((k, i) => `<div class="perk glass" data-i="${i}">${icon('star', 26)}<b>${PERKS[k].name}</b><span>${PERKS[k].desc}</span></div>`).join('') + `<button class="btn" id="perkLater" style="width:100%;justify-content:center">Nanti</button>`; pk.querySelectorAll('.perk').forEach(el => el.onclick = () => { App.net.act({ a: 'perk', i: +el.dataset.i }); pk.classList.add('hidden'); vib(50); }); $('#perkLater').onclick = () => { pk.classList.add('hidden'); pk.dataset.hide = key; }; } if (pk.dataset.hide !== key) pk.classList.remove('hidden'); }
+  if (d.pc) { const key = d.pc.join(); if (pk.dataset.k !== key) { pk.dataset.k = key; pk.innerHTML = `<div style="width:100%;text-align:center;font-family:'Lilita One','Arial Black',sans-serif;font-size:22px">⭐ PILIH PERK</div>` + d.pc.map((k, i) => `<div class="perk glass" data-i="${i}">${icon('star', 26)}<b>${PERKS[k].name}</b><span>${PERKS[k].desc}</span></div>`).join('') + `<button class="btn" id="perkLater" style="width:100%;justify-content:center">Nanti</button>`; pk.querySelectorAll('.perk').forEach(el => el.onclick = () => { PADIO.act({ a: 'perk', i: +el.dataset.i }); pk.classList.add('hidden'); vib(50); }); $('#perkLater').onclick = () => { pk.classList.add('hidden'); pk.dataset.hide = key; }; } if (pk.dataset.hide !== key) pk.classList.remove('hidden'); }
   else { pk.classList.add('hidden'); pk.dataset.k = ''; }
+}
+
+// ================= PAUSE (phone) =================
+function openPause() {
+  const solo = App.touch, el = $('#pauseMenu'); el.classList.remove('hidden'); if (solo) { App.paused = true; App.started = false; }
+  const q = Q.forced == null ? 'Otomatis' : ['Hemat', 'Sedang', 'Tinggi'][Q.forced];
+  el.innerHTML = `<div class="card glass"><h2 class="title">${solo ? '⏸ PAUSE' : '⚙ MENU'}</h2>
+    <button class="btn primary" data-p="resume">▶ Lanjut</button>
+    <div class="row2"><button class="btn" data-p="music">${SFX.musicOn ? '🎵 Musik ON' : '🎵 Musik OFF'}</button><button class="btn" data-p="sfx">${SFX.sfxOn ? '🔊 Suara ON' : '🔇 Suara OFF'}</button></div>
+    ${solo ? `<button class="btn" data-p="q">🖼 Grafis: ${q}</button>` : ''}
+    <button class="btn" data-p="help">❓ Cara main</button>
+    <button class="btn" data-p="exit">🚪 Keluar ke menu</button></div>`;
+  el.onclick = e => { const b = e.target.closest('[data-p]'); if (!b) return; SFX.play('click'); const k = b.dataset.p;
+    if (k === 'resume') closePause(); else if (k === 'music') { SFX.toggleMusic(); openPause(); } else if (k === 'sfx') { SFX.toggleSfx(); openPause(); }
+    else if (k === 'q') { Q.forced = Q.forced == null ? 0 : Q.forced === 2 ? null : Q.forced + 1; App.R && App.R.resize(); openPause(); }
+    else if (k === 'help') showHelp(); else if (k === 'exit') Dlg.fire({ icon: 'question', title: 'Keluar?', text: 'Progres game ini akan hilang.', showCancelButton: true, confirmButtonText: 'Keluar' }).then(r => { if (r.isConfirmed) location.href = location.pathname; }); };
+}
+function closePause() { $('#pauseMenu').classList.add('hidden'); if (App.touch && App.paused) { App.paused = false; App.started = true; lastT = performance.now(); } }
+
+// ================= SOLO ON PHONE: game canvas + touch controls on one screen =================
+function startSoloTouch() {
+  App.mode = 'solo'; App.touch = true; document.body.classList.add('touchsolo');
+  if (Q.forced == null) Q.level = 1;
+  setupWorld(); App.R.touch = true;
+  App.game.addPlayer('local', store.get('nh_name', '') || 'Kamu', 0); App.localId = null; App.soloId = 'local';
+  const p = App.game.players.get('local'); p.isPad = true;
+  const pad = $('#pad'); pad.classList.remove('hidden'); pad.classList.add('on'); fillIcons(pad);
+  PADIO = { act: a => App.game.action('local', a), map: () => { PAD.map = HostNet.prototype.mapData.call({ g: App.game }); drawPadMap(); } };
+  PAD.status = 'ok'; $('#padColor').style.background = p.color;
+  setupSticks(); setupPadButtons();
+  try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => { })).catch(() => { }); } catch (e) { }
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { }
+  document.addEventListener('visibilitychange', () => { if (document.hidden && App.started) openPause(); });
+  App.started = true; SFX.play('day');
+  padToast('Gerakkan stik kiri — AUTO menyerang & menambang otomatis', 'good');
+  setInterval(() => { if (PAD.mapOpen) PADIO.map(); }, 600);
+}
+function touchSoloTick() {
+  const g = App.game, p = g.players.get('local'); if (!p) return;
+  g.setInput('local', { mx: PAD.input.mx, my: PAD.input.my, ax: PAD.input.ax, ay: PAD.input.ay, fire: PAD.input.f, gx: null, gy: null });
+  App.meT = (App.meT || 0) - 1; if (App.meT <= 0) { App.meT = 6; const me = g.meState(p); me.started = true; PAD.me = me; padRender(me); }
 }
 
 // ================= boot =================
