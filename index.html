@@ -4,9 +4,10 @@
 <meta name="theme-color" content="#0d1b12"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>Night Horde — Chibi Zombie Survival</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script defer src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>:root{--glass:rgba(255,255,255,.12);--glass2:rgba(255,255,255,.2);--line:rgba(255,255,255,.28);--txt:#fff;--accent:#ffd166;--bad:#ff5d73;--good:#7bd88f;--blur:blur(14px) saturate(170%)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overflow:hidden;background:#0d1b12;color:var(--txt);font-family:Nunito,system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
@@ -213,6 +214,14 @@ input.inp:focus{border-color:#ffd166;box-shadow:0 0 0 3px rgba(255,209,102,.25)}
       <div style="font-weight:900;display:flex;gap:8px;align-items:center"><span data-i="users"></span> Pemain <span id="netCount" style="opacity:.7;font-size:13px"></span></div>
       <div class="plist" id="plist"><span style="opacity:.6">Menunggu controller...</span></div>
       <div style="font-size:12px;opacity:.75;line-height:1.5">HP: buka link → isi nama → <b>Jadi Controller</b>. Laptop teman: buka link → <b>Jadi Layar</b> dengan nama yang sama agar kamera mengikuti karakter dia.</div>
+      <details id="netCfg" style="font-size:13px"><summary style="cursor:pointer;font-weight:800;opacity:.85">⚙ Jaringan lanjutan (TURN server, opsional)</summary>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          <div style="opacity:.75">Isi kalau HP tidak bisa tersambung saat beda jaringan (mis. HP pakai data seluler, laptop di Wi-Fi kampus). Dapatkan gratis di metered.ca (Open Relay) atau expressturn.com.</div>
+          <input class="inp" id="tUrl" placeholder="turn:server:3478, turns:server:443?transport=tcp">
+          <div class="row" style="display:flex;gap:6px"><input class="inp" id="tUser" placeholder="username"><input class="inp" id="tPass" placeholder="credential"></div>
+          <button class="btn" id="tSave" style="justify-content:center">Simpan TURN</button>
+        </div></details>
+      <div id="netStatus" style="font-size:12px;font-weight:800;opacity:.85"></div>
       <div style="display:flex;gap:10px"><button class="btn primary" id="bStart" style="flex:1;justify-content:center;font-size:18px"><span data-i="play"></span>MULAI</button><button class="btn" id="bLobbyClose">Tutup</button></div>
     </div>
   </div>
@@ -393,18 +402,28 @@ const HAIR_COLORS = ['#3d2c2e', '#f4a261', '#264653', '#e76f51', '#6d597a', '#f1
 
 // ===== synth SFX + music (no assets) =====
 const SFX = (() => {
-  let ac = null, master = null, musicG = null, noiseBuf = null, musicOn = true, vol = 0.7;
+  let ac = null, master = null, musicG = null, noiseBuf = null, musicOn = true, vol = 0.8;
+  try { musicOn = localStorage.getItem('nh_music') !== '0'; } catch (e) { }
   let last = {};
+  let unlocked = false, sfxOn = true;
   function init() {
-    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
-    try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
-    master = ac.createGain(); master.gain.value = vol;
+    if (ac) { if (ac.state !== 'running') { try { ac.resume(); } catch (e) { } } unlockBlip(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try { ac = new AC({ latencyHint: 'interactive' }); } catch (e) { try { ac = new AC(); } catch (e2) { return; } }
+    if (ac.state !== 'running') { try { ac.resume(); } catch (e) { } }
+    try { sfxOn = localStorage.getItem('nh_sfx') !== '0'; } catch (e) { }
+    master = ac.createGain(); master.gain.value = sfxOn ? vol : 0;
     const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 6;
     master.connect(comp); comp.connect(ac.destination);
-    musicG = ac.createGain(); musicG.gain.value = 0.0; musicG.connect(master);
+    musicG = ac.createGain(); musicG.gain.value = musicOn ? 0.6 : 0; musicG.connect(master);
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 1.2, ac.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    startMusic();
+    startMusic(); unlockBlip();
+  }
+  // iOS/Safari: a sound must actually start inside a user gesture to unlock output
+  function unlockBlip() {
+    if (!ac || unlocked) return;
+    try { const b = ac.createBuffer(1, 1, 22050), s = ac.createBufferSource(); s.buffer = b; s.connect(ac.destination); s.start(0); unlocked = ac.state === 'running'; } catch (e) { }
   }
   function env(g, t, a, peak, dcy) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dcy); }
   function tone(type, f0, f1, dur, v, t0 = 0, dest) {
@@ -450,7 +469,8 @@ const SFX = (() => {
     bossdie: v => { noise(1.4, .9 * v, 'lowpass', 2500, 50); [262, 330, 392, 523, 659].forEach((f, i) => tone('square', f, 0, .25, .15 * v, .3 + i * .1)); },
   };
   function play(name, v = 1) {
-    if (!ac || !lib[name]) return;
+    if (!ac || !lib[name] || !sfxOn) return;
+    if (ac.state !== 'running') { try { ac.resume(); } catch (e) { } return; }
     const now = performance.now();
     if (last[name] && now - last[name] < (name === 'smg' || name === 'flame' ? 45 : 28)) return; // throttle spam
     last[name] = now;
@@ -462,7 +482,7 @@ const SFX = (() => {
   function startMusic() {
     if (mTimer) return;
     mTimer = setInterval(() => {
-      if (!ac || !musicOn) return;
+      if (!ac || !musicOn || ac.state !== 'running') return;
       const t = ac.currentTime + 0.05, s = step++ % 16;
       const base = night ? 55 : 82.4;
       const seq = night ? bassNight : bassDay;
@@ -477,15 +497,22 @@ const SFX = (() => {
   return {
     init, play,
     at(name, x, y, cam) { // spatial attenuation relative to camera
-      if (!cam) return play(name); const d = Math.hypot(x - cam.x, y - cam.y);
-      const v = clamp(1.15 - d / 900, 0, 1); if (v > 0.05) play(name, v);
+      if (!cam) return play(name); const z = cam.z || 1, d = Math.hypot(x - cam.x, y - cam.y) * z; // screen-space distance
+      const onScreen = Math.abs(x - cam.x) * z < innerWidth / 2 && Math.abs(y - cam.y) * z < innerHeight / 2;
+      let v = clamp(1.15 - d / 750, 0, 1); if (onScreen) v = Math.max(v, .35); if (v > 0.05) play(name, v);
     },
-    setNight(n) { night = n; if (musicG) musicG.gain.setTargetAtTime(musicOn ? (n ? 0.9 : 0.6) : 0, ac.currentTime, 0.5); },
+    setNight(n) { night = n; if (ac && musicG) musicG.gain.setTargetAtTime(musicOn ? (n ? 0.9 : 0.6) : 0, ac.currentTime, 0.5); },
     setIntensity(v) { intensity = v; },
-    toggleMusic() { musicOn = !musicOn; if (musicG) musicG.gain.value = musicOn ? .7 : 0; return musicOn; },
-    get ready() { return !!ac; }
+    toggleMusic() { musicOn = !musicOn; if (ac && musicG) { musicG.gain.cancelScheduledValues(ac.currentTime); musicG.gain.setValueAtTime(musicOn ? (night ? .9 : .6) : 0, ac.currentTime); } try { localStorage.setItem('nh_music', musicOn ? '1' : '0'); } catch (e) { } return musicOn; },
+    toggleSfx() { sfxOn = !sfxOn; if (ac && master) master.gain.setValueAtTime(sfxOn ? vol : 0, ac.currentTime); try { localStorage.setItem('nh_sfx', sfxOn ? '1' : '0'); } catch (e) { } return sfxOn; },
+    get musicOn() { return musicOn; }, get sfxOn() { return sfxOn; },
+    get state() { return ac ? ac.state : 'none'; },
+    get ready() { return !!ac && ac.state === 'running'; }
   };
 })();
+
+['pointerdown', 'touchend', 'keydown', 'mousedown'].forEach(ev => addEventListener(ev, () => SFX.init(), { capture: true, passive: true }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden && SFX.state === 'suspended') SFX.init(); });
 
 // ===== Glass-modern icons (inline SVG) =====
 const GLYPH = {
@@ -534,6 +561,9 @@ const GLYPH = {
   mortar: '<path d="M4 20l4-10h8l4 10z"/><path d="M9 10l1-7h4l1 7z"/>',
   minebld: '<path d="M3 20l6-12 3 5 3-7 6 14z"/><circle cx="15" cy="7" r="2" fill="#ffdd00"/>',
   qr: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3z"/>',
+  speaker: '<path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8a5 5 0 010 8M18.5 5.5a8.5 8.5 0 010 13" fill="none" stroke="currentColor" stroke-width="2"/>',
+  mute: '<path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 9l6 6M22 9l-6 6" stroke="currentColor" stroke-width="2.4"/>',
+  wifi: '<path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="12" cy="19.5" r="1.8"/>',
   copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V4h12" fill="none" stroke="currentColor" stroke-width="2"/>',
 };
 const ICON_COL = {
@@ -548,7 +578,7 @@ const ICON_COL = {
   tower: ['#e9ecef', '#868e96'], fire: ['#ffd43b', '#f03e3e'], bolt: ['#e5dbff', '#7950f2'], farm: ['#b2f2bb', '#37b24d'],
   wall: ['#e9a46b', '#8a4b20'], torch: ['#ffe066', '#e8590c'], spike: ['#dee2e6', '#495057'], tar: ['#495057', '#000000'],
   heal: ['#8ce99a', '#2f9e44'], cannon: ['#868e96', '#212529'], mortar: ['#ced4da', '#495057'], minebld: ['#ffe066', '#a0703c'],
-  qr: ['#fff', '#adb5bd'], copy: ['#fff', '#ced4da'],
+  qr: ['#fff', '#adb5bd'], speaker: ['#a5d8ff', '#1c7ed6'], mute: ['#ffc9c9', '#c92a2a'], wifi: ['#b2f2bb', '#2f9e44'], copy: ['#fff', '#ced4da'],
 };
 const BLD_ICON = { wall: 'wall', spike: 'spike', torch: 'torch', arrow: 'tower', mine: 'minebld', farm: 'farm', tar: 'tar', cannon: 'cannon', flame: 'fire', heal: 'heal', tesla: 'bolt', mortar: 'mortar' };
 const WEP_ICON = { pickaxe: 'hammer', bat: 'sword', katana: 'sword', pistol: 'gun', shotgun: 'gun', smg: 'gun', crossbow: 'tower', flamer: 'fire', gl: 'grenade' };
@@ -873,6 +903,7 @@ class Director {
     if (g.fog) intel.unshift('🌫 <b>Kabut tebal</b> — jarak pandang berkurang.');
     if (!intel.length) intel.push('Horde mengamati cara kalian bermain...');
     q.sort((a, b) => a.t - b.t);
+    g.spawnEnd = q.length ? q[q.length - 1].t : 0;
     this.history.push({ w, size: list.length, intensity: this.intensity });
     this.reset();
     return { q, intel, size: list.length };
@@ -889,6 +920,7 @@ class Game {
     this.buildings = new Map(); this.players = new Map(); this.zombies = []; this.projs = []; this.pickups = []; this.corpses = [];
     this.ev = []; this.nid = 1; this.time = 0;
     this.res = { wood: 40, stone: 20, gold: 30, food: 15, scrap: 10 };
+    this.spawnEnd = 0; this.huntOn = false;
     this.wave = 0; this.phase = 'day'; this.phaseT = 0; this.dayLen = 85; this.nightQ = []; this.nightT = 0;
     this.mut = {}; this.director = new Director(); this.bloodMoon = false; this.fog = false;
     this.bver = 1; this.flowDirty = true; this.flowT = 0; this.flow = new Float32Array(MAP * MAP);
@@ -1047,6 +1079,7 @@ class Game {
     let hp = d.hp * (1 + .13 * (w - 1) + .004 * w * w); if (d.boss) hp *= (1 + .25 * (n - 1)) * (1 + w / 20);
     if (opt.hpMul) hp *= opt.hpMul;
     const z = { id: this.nid++, k, x, y, vx: 0, vy: 0, hp, max: hp, sp: d.sp * (this.bloodMoon ? 1.15 : 1) * (1 + .1 * (this.mut.swift || 0)) * rnd(.9, 1.1), dmg: d.dmg * (1 + .05 * (w - 1)), r: d.r, cd: 0, ang: 0, flash: 0, slow: 0, burn: 0, buffT: 0, under: k === 'digger', ab: rnd(2, 5), boss: !!d.boss, tgt: null, retT: 0, stuck: 0, charge: 0 };
+    if (this.huntOn) z.hunt = true;
     this.zombies.push(z);
     if (d.boss) { this.emit({ e: 'boss', name: d.name, id: z.id }); this.emit({ e: 's', n: 'boss', x, y }); this.emit({ e: 'shake', v: 10 }); }
     return z;
@@ -1107,7 +1140,9 @@ class Game {
     for (const p of this.players.values()) p.perkChoice = null;
   }
   startDay() {
-    this.phase = 'day'; this.phaseT = 0; this.dayLen = clamp(70 - this.wave * .5, 45, 70);
+    this.phase = 'day'; this.phaseT = 0; this.dayLen = clamp(70 - this.wave * .5, 45, 70); this.huntOn = false;
+    let burned = 0; for (const z of this.zombies) if (!z.boss) { z.sun = 1; burned++; }
+    if (burned) this.emit({ e: 'msg', text: `☀ Matahari terbit! ${burned} zombie tersisa terbakar`, cls: 'good' });
     // dawn repairs
     for (const b of this.buildings.values()) { b.hp = Math.min(b.max, b.hp + b.max * .5); }
     this.bver++;
@@ -1143,7 +1178,12 @@ class Game {
       this.nightT += dt;
       while (this.nightQ.length && this.nightQ[0].t <= this.nightT) { const s = this.nightQ.shift(); const [x, y] = this.sidePos(s.side); this.spawnZombie(s.k, x, y); }
       if ((this.dirSampleT -= dt) <= 0) { this.dirSampleT = .5; this.director.sample(this); }
-      if (!this.nightQ.length && this.zombies.length === 0 && this.nightT > 15) this.startDay();
+      if (!this.nightQ.length) {
+        const after = this.nightT - (this.spawnEnd || 0);
+        if (this.zombies.length === 0 && this.nightT > 15) this.startDay();
+        else if (after > 22 && this.zombies.length <= 4 && !this.huntOn) { this.huntOn = true; for (const z of this.zombies) z.hunt = true; this.emit({ e: 'msg', text: `Tinggal ${this.zombies.length} zombie — mereka menyerbu! Ikuti panah merah`, cls: 'warn' }); }
+        else if (after > 80) this.startDay();
+      }
     }
     // gold income
     this.res.gold += dt * (.6 * this.coreTier);
@@ -1225,7 +1265,9 @@ class Game {
     const players = [...this.players.values()].filter(p => !p.dead);
     for (let i = this.zombies.length - 1; i >= 0; i--) {
       const z = this.zombies[i]; if (z.hp <= 0) { this.zombies.splice(i, 1); continue; }
-      const d = ZT[z.k]; z.flash = Math.max(0, z.flash - dt); z.cd -= dt; z.buffT = Math.max(0, z.buffT - dt); z.ab -= dt;
+      const d = ZT[z.k];
+      if (z.sun) { z.burn = 1; z.hp -= z.max * dt / 1.4; if (Math.random() < dt * 6) this.emit({ e: 'fx', k: 'blood', x: z.x, y: z.y, c: '#ff9f1c' }); if (z.hp <= 0) { this.killZombie(z, null); continue; } }
+      z.flash = Math.max(0, z.flash - dt); z.cd -= dt; z.buffT = Math.max(0, z.buffT - dt); z.ab -= dt;
       // burning
       if (z.burn > 0) { z.burn -= dt; z.burnAcc = (z.burnAcc || 0) + dt; if (z.burnAcc > .25) { z.burnAcc = 0; this.hurtZombie(z, 4, 'fire', z.burnSrc); if (z.hp <= 0) continue; } }
       // target selection
@@ -1242,7 +1284,7 @@ class Game {
       const dTgt = Math.hypot(tx - z.x, ty - z.y);
       // digger surfaces near target
       if (z.under && (dTgt < 90 || (!z.tgt && Math.hypot(CORE_X - z.x, CORE_Y - z.y) < 140))) { z.under = false; this.emit({ e: 'fx', k: 'dirt', x: z.x, y: z.y }); this.emit({ e: 's', n: 'rock', x: z.x, y: z.y }); }
-      let spMul = (z.slow > 0 ? .45 : 1) * (z.buffT > 0 ? 1.35 : 1); z.slow = Math.max(0, z.slow - dt);
+      let spMul = (z.slow > 0 ? .45 : 1) * (z.buffT > 0 ? 1.35 : 1) * (z.hunt ? 1.8 : 1); z.slow = Math.max(0, z.slow - dt);
       let stop = false;
       // ---- special abilities ----
       if (z.k === 'spitter' && z.ab <= 0) {
@@ -1543,7 +1585,7 @@ class Renderer {
     // offscreen indicators for crates & boss
     ctx.restore();
     for (const k of V.pickups) if (k.k === 'crate') this.edgeArrow(ctx, k.x, k.y, '#ffd60a', '📦');
-    for (const z of V.zombies) if (z.boss) this.edgeArrow(ctx, z.x, z.y, '#ff3b3b', '☠');
+    for (const z of V.zombies) if (z.boss) this.edgeArrow(ctx, z.x, z.y, '#ff3b3b', '☠'); else if (z.hunt) this.edgeArrow(ctx, z.x, z.y, '#ff6b6b', '🧟');
   }
   edgeArrow(ctx, x, y, col, ch) {
     const c = this.cam, W = innerWidth, H = innerHeight, sx = (x - c.x) * c.z + W / 2, sy = (y - c.y) * c.z + H / 2;
@@ -1663,108 +1705,310 @@ function drawMinimap(mc, V, cam, follow) {
   const w = innerWidth / cam.z * k, h = innerHeight / cam.z * k; x.strokeStyle = 'rgba(255,255,255,.5)'; x.strokeRect(cam.x * k - w / 2, cam.y * k - h / 2, w, h);
 }
 
-// ===== Networking (PeerJS / WebRTC P2P). Host laptop = authoritative sim =====
-const PEER_PREFIX = 'nhorde-v1-';
-const PEER_OPTS = { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } };
+// ===== Networking v2 (PeerJS / WebRTC P2P). Host laptop = authoritative sim =====
+// Uses serialization:'raw' + own JSON + chunking. (PeerJS 'json' mode rejects messages >= 16300 bytes,
+// which silently killed viewer snapshots in v1.)
+const PEER_PREFIX = 'nhorde-v2-';
+const STUN = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:global.stun.twilio.com:3478' }];
+function iceServers() {
+  const list = STUN.slice();
+  try { const t = JSON.parse(store.get('nh_turn', 'null')); if (t && t.urls) list.push({ urls: t.urls.split(',').map(s => s.trim()).filter(Boolean), username: t.username || undefined, credential: t.credential || undefined }); } catch (e) { }
+  return list;
+}
+function peerOpts() { return { debug: 1, config: { iceServers: iceServers(), sdpSemantics: 'unified-plan' } }; }
 const BT_IDX = Object.keys(BT), PK_IDX = ['gold', 'scrap', 'ammo', 'food', 'crate'];
 function genCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; }
 function hasPeer() { return typeof window.Peer === 'function'; }
+const CHUNK = 12000;
+
+// ---------- Link: wraps a PeerJS DataConnection (chunking, heartbeat, robust close) ----------
+class Link {
+  constructor(conn) {
+    this.conn = conn; this.h = {}; this.parts = new Map(); this.lastRx = performance.now(); this.closed = false; this.cid = 0;
+    conn.on('data', raw => this._rx(raw));
+    conn.on('open', () => this._emit('open'));
+    conn.on('close', () => this._close('close'));
+    conn.on('error', e => console.warn('[net] conn error', e && (e.type || e.message || e)));
+    conn.on('iceStateChanged', s => { if (s === 'failed' || s === 'closed') this._close('ice-' + s); });
+  }
+  on(e, f) { (this.h[e] = this.h[e] || []).push(f); return this; }
+  _emit(e, a) { (this.h[e] || []).forEach(f => { try { f(a); } catch (err) { console.error(err); } }); }
+  get open() { return !this.closed && !!this.conn.open; }
+  get busy() { const dc = this.conn.dataChannel; return (this.conn.bufferSize || 0) > 4 || (dc && dc.bufferedAmount > 262144); }
+  send(obj) { return this.sendStr(JSON.stringify(obj)); }
+  sendStr(s) {
+    if (!this.open) return false;
+    try {
+      if (s.length <= CHUNK) this.conn.send(s);
+      else { const id = (++this.cid).toString(36), n = Math.ceil(s.length / CHUNK); for (let i = 0; i < n; i++) this.conn.send('\u0001' + id + '|' + i + '|' + n + '|' + s.slice(i * CHUNK, (i + 1) * CHUNK)); }
+      return true;
+    } catch (e) { console.warn('[net] send failed', e); return false; }
+  }
+  _rx(raw) {
+    this.lastRx = performance.now();
+    if (typeof raw !== 'string') { try { raw = new TextDecoder().decode(raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw); } catch (e) { return; } }
+    let s = raw;
+    if (raw.charCodeAt(0) === 1) {
+      const a = raw.indexOf('|'), b = raw.indexOf('|', a + 1), c = raw.indexOf('|', b + 1);
+      const id = raw.slice(1, a), i = +raw.slice(a + 1, b), n = +raw.slice(b + 1, c);
+      let p = this.parts.get(id); if (!p) { p = { n, got: 0, arr: new Array(n), t: performance.now() }; this.parts.set(id, p); }
+      if (p.arr[i] == null) { p.arr[i] = raw.slice(c + 1); p.got++; }
+      if (p.got < p.n) { if (this.parts.size > 8) { for (const [k, v] of this.parts) if (performance.now() - v.t > 5000) this.parts.delete(k); } return; }
+      this.parts.delete(id); s = p.arr.join('');
+    }
+    let obj; try { obj = JSON.parse(s); } catch (e) { console.warn('[net] bad packet'); return; }
+    this._emit('data', obj);
+  }
+  _close(why) { if (this.closed) return; this.closed = true; this._emit('close', why); }
+  close() { try { this.conn.close(); } catch (e) { } this._close('local'); }
+}
+
+
+// ---------- MQTT relay fallback (works through CGNAT / strict Wi-Fi where P2P fails) ----------
+const RELAY_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+const RELAY_ROOT = 'nhorde/v2/';
+function hasMqtt() { return typeof window.mqtt === 'object' && window.mqtt && typeof window.mqtt.connect === 'function'; }
+function mqttClient(url, persistent) { return mqtt.connect(url, { clientId: 'nh_' + Math.random().toString(36).slice(2, 12), clean: true, connectTimeout: 7000, reconnectPeriod: persistent ? 3000 : 0, keepalive: 20, protocolVersion: 4 }); }
+function payloadStr(p) { if (typeof p === 'string') return p; try { return new TextDecoder().decode(p); } catch (e) { return String(p); } }
+class RelayLink {
+  constructor(client, outTopic, tag) { this.client = client; this.out = outTopic; this.tag = tag; this.h = {}; this.closed = false; this.lastRx = performance.now(); this.relay = true; }
+  on(e, f) { (this.h[e] = this.h[e] || []).push(f); return this; }
+  _emit(e, a) { (this.h[e] || []).forEach(f => { try { f(a); } catch (err) { console.error(err); } }); }
+  get open() { return !this.closed && !!this.client && this.client.connected; }
+  get busy() { return false; }
+  send(o) { return this.sendStr(JSON.stringify(o)); }
+  sendStr(s) { if (!this.open) return false; try { this.client.publish(this.out, this.tag + '\n' + s, { qos: 0 }); return true; } catch (e) { return false; } }
+  _rxStr(s) { this.lastRx = performance.now(); let o; try { o = JSON.parse(s); } catch (e) { return; } if (o && o.t === 'bye') { this._close('bye'); return; } this._emit('data', o); }
+  _close(why) { if (this.closed) return; this.closed = true; this._emit('close', why); }
+  close() { if (this.closed) return; try { this.sendStr('{"t":"bye"}'); } catch (e) { } this._close('local'); }
+}
 
 // ---------- HOST ----------
 class HostNet {
   constructor(game, onChange) {
-    this.g = game; this.onChange = onChange; this.conns = new Map(); this.code = null; this.peer = null; this.snapT = 0; this.meT = 0; this.bT = 0; this.lastBver = -1; this.rosterDirty = true; this.pidN = 1;
+    this.g = game; this.onChange = onChange; this.links = new Set(); this.code = null; this.peer = null; this.snapT = 0; this.meT = 0; this.bT = 0; this.lastBver = -1; this.rosterDirty = true; this.pidN = 1; this.pendingEv = []; this._status = 'init'; this.everOpen = false; this.peerOpen = false; this.relayOk = false;
   }
   start(cb) {
-    if (!hasPeer()) { cb && cb(false, 'PeerJS gagal dimuat (cek internet). Mode lokal saja.'); return; }
+    this.code = genCode(); let done = false;
+    const ok = () => { if (!done) { done = true; cb && cb(true); } this.onChange && this.onChange(); };
+    const fail = (why) => { if (!done && !this.peerOpen && !this.relayOk) { done = true; this.status = 'error'; cb && cb(false, why); } };
+    this.startRelay(ok);
+    if (!hasPeer()) { if (!hasMqtt()) { this.status = 'nolib'; done = true; cb && cb(false, 'Library jaringan gagal dimuat (cek internet)'); } return; }
     const tryOpen = (n = 0) => {
-      this.code = genCode(); const peer = new Peer(PEER_PREFIX + this.code, PEER_OPTS); this.peer = peer;
-      peer.on('open', () => cb && cb(true));
-      peer.on('error', err => { if (err.type === 'unavailable-id' && n < 4) { peer.destroy(); tryOpen(n + 1); } else if (err.type !== 'peer-unavailable') { console.warn(err); cb && cb(false, err.type || String(err)); cb = null; } });
-      peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) { } });
-      peer.on('connection', conn => this.onConn(conn));
+      let peer; try { peer = new Peer(PEER_PREFIX + this.code, peerOpts()); } catch (e) { setTimeout(() => fail(e.message), 9000); return; }
+      this.peer = peer;
+      peer.on('open', () => { this.peerOpen = true; this.status = 'online'; this.everOpen = true; ok(); });
+      peer.on('connection', conn => this.attach(new Link(conn)));
+      peer.on('disconnected', () => { this.peerOpen = false; this.onChange && this.onChange(); setTimeout(() => { try { if (!peer.destroyed && peer.disconnected) peer.reconnect(); } catch (e) { } }, 1500); });
+      peer.on('error', err => {
+        const t = err && err.type; console.warn('[net] host peer error', t, err);
+        if (t === 'unavailable-id' && !this.everOpen && n < 5) { peer.destroy(); this.code = genCode(); this.resubscribe(); tryOpen(n + 1); return; }
+        if (t === 'peer-unavailable') return;
+        if (!this.everOpen) setTimeout(() => fail(t || String(err)), this.relayOk ? 0 : 9000);
+      });
     };
     tryOpen();
   }
-  onConn(conn) {
-    const c = { conn, role: null, pid: null, name: '' }; this.conns.set(conn.connectionId || conn.peer + Math.random(), c);
-    conn.on('data', d => this.onData(c, d));
-    conn.on('close', () => this.onClose(c)); conn.on('error', () => this.onClose(c));
+  get status() { return this.peerOpen || this.relayOk ? 'online' : (this._status === 'error' || this._status === 'nolib' ? this._status : (this.everOpen ? 'reconnecting' : 'init')); }
+  set status(v) { this._status = v; }
+  get modeLabel() { return [this.peerOpen ? 'P2P' : null, this.relayOk ? 'Relay' : null].filter(Boolean).join(' + ') || '—'; }
+  startRelay(ok) {
+    if (!hasMqtt()) return; this.relays = [];
+    for (const url of RELAY_BROKERS) {
+      let c; try { c = mqttClient(url, true); } catch (e) { continue; }
+      const R = { url, c, links: new Map(), topic: null }; this.relays.push(R);
+      c.on('connect', () => { R.topic = RELAY_ROOT + this.code + '/h'; c.subscribe(R.topic, { qos: 0 }); R.up = true; this.relayOk = true; ok && ok(); });
+      c.on('close', () => { R.up = false; this.relayOk = this.relays.some(r => r.up); this.onChange && this.onChange(); });
+      c.on('error', e => console.warn('[relay]', url, e && e.message));
+      c.on('message', (topic, payload) => {
+        if (topic !== R.topic) return; const str = payloadStr(payload), nl = str.indexOf('\n'); if (nl < 0) return;
+        const cid = str.slice(0, nl), body = str.slice(nl + 1);
+        let L = R.links.get(cid);
+        if (!L || L.closed) { if (body.indexOf('"hello"') < 0) return; L = new RelayLink(c, RELAY_ROOT + this.code + '/c/' + cid, 'h'); R.links.set(cid, L); L.on('close', () => R.links.delete(cid)); this.attach(L); }
+        L._rxStr(body);
+      });
+    }
   }
-  onClose(c) {
-    for (const [k, v] of this.conns) if (v === c) this.conns.delete(k);
-    if (c.role === 'pad' && c.pid) { const p = this.g.players.get(c.pid); if (p) { p.input = { mx: 0, my: 0, ax: 0, ay: 0, fire: false }; this.g.emit({ e: 'msg', text: `${p.name}: controller terputus (tunggu reconnect)`, cls: 'warn' }); } }
+  resubscribe() { for (const R of this.relays || []) if (R.up) { try { if (R.topic) R.c.unsubscribe(R.topic); } catch (e) { } R.topic = RELAY_ROOT + this.code + '/h'; R.c.subscribe(R.topic, { qos: 0 }); } }
+  setTurn() { if (this.peer && this.peer.options) this.peer.options.config = Object.assign({}, this.peer.options.config, { iceServers: iceServers() }); }
+  attach(L) {
+    L.role = null; L.pid = null; L.name = ''; this.links.add(L);
+    L.on('data', d => this.onData(L, d));
+    L.on('close', () => this.onClose(L));
+  }
+  onClose(L) {
+    if (!this.links.has(L)) return; this.links.delete(L);
+    if (L.role === 'pad' && L.pid && !this.padLink(L.pid)) { const p = this.g.players.get(L.pid); if (p) { p.input = { mx: 0, my: 0, ax: 0, ay: 0, fire: false, gx: null, gy: null }; this.g.emit({ e: 'msg', text: `${p.name}: controller terputus — buka lagi dengan nama sama`, cls: 'warn' }); } }
     this.onChange && this.onChange();
   }
-  onData(c, d) {
+  padLink(pid) { for (const l of this.links) if (l.role === 'pad' && l.pid === pid) return l; return null; }
+  onData(L, d) {
     if (!d || !d.t) return;
+    if (d.t === 'ping') { L.send({ t: 'pong', ts: d.ts }); return; }
     if (d.t === 'hello') {
-      c.role = d.role; c.name = String(d.name || 'Player').slice(0, 12);
-      if (d.role === 'pad') {
-        // reconnect to an existing player with the same name if their pad is gone
-        let p = [...this.g.players.values()].find(p => p.name.toLowerCase() === c.name.toLowerCase() && ![...this.conns.values()].some(o => o !== c && o.pid === p.id));
-        if (!p) { if (this.g.players.size >= 8) { c.conn.send({ t: 'full' }); return; } p = this.g.addPlayer('p' + (this.pidN++), c.name, this.g.players.size + (this.localIdx || 0)); }
-        else this.g.emit({ e: 'msg', text: `${p.name} tersambung kembali`, cls: 'good' });
-        c.pid = p.id; c.conn.send({ t: 'welcome', pid: p.id, color: p.color, code: this.code });
-      } else { c.conn.send({ t: 'welcome', seed: this.g.seed, code: this.code }); this.lastBver = -1; }
+      L.role = d.role === 'view' ? 'view' : 'pad'; L.name = String(d.name || 'Player').trim().slice(0, 12) || 'Player';
+      if (L.role === 'pad') {
+        let p = [...this.g.players.values()].find(p => p.id !== 'local' && p.name.toLowerCase() === L.name.toLowerCase());
+        if (p) { // take over: same name = same character (reconnect after screen lock etc.)
+          for (const o of [...this.links]) if (o !== L && o.role === 'pad' && o.pid === p.id) { o.pid = null; o.role = 'stale'; o.close(); }
+          this.g.emit({ e: 'msg', text: `${p.name} tersambung kembali`, cls: 'good' });
+        } else {
+          if (this.g.players.size >= 8) { L.send({ t: 'full' }); return; }
+          p = this.g.addPlayer('p' + (this.pidN++), L.name, this.g.players.size + (this.localIdx || 0));
+        }
+        L.pid = p.id; L.send({ t: 'welcome', pid: p.id, color: p.color, code: this.code, name: p.name });
+      } else { L.send({ t: 'welcome', seed: this.g.seed, code: this.code }); this.lastBver = -1; }
       this.rosterDirty = true; this.onChange && this.onChange(); return;
     }
-    if (c.role === 'pad' && c.pid) {
-      if (d.t === 'in') this.g.setInput(c.pid, { mx: +d.mx || 0, my: +d.my || 0, ax: +d.ax || 0, ay: +d.ay || 0, fire: !!d.f, gx: null, gy: null });
-      else if (d.t === 'act') this.g.action(c.pid, d);
+    if (L.role === 'pad' && L.pid) {
+      if (d.t === 'in') this.g.setInput(L.pid, { mx: clamp(+d.mx || 0, -1, 1), my: clamp(+d.my || 0, -1, 1), ax: +d.ax || 0, ay: +d.ay || 0, fire: !!d.f, gx: null, gy: null });
+      else if (d.t === 'act') this.g.action(L.pid, d);
     }
-    if (c.role === 'view' && d.t === 'follow') c.follow = d.name;
   }
-  broadcast(role, msg) { for (const c of this.conns.values()) if (c.role === role && c.conn.open) { try { c.conn.send(msg); } catch (e) { } } }
+  broadcastStr(role, s) { for (const l of this.links) if (l.role === role && l.open) l.sendStr(s); }
+  broadcast(role, msg) { this.broadcastStr(role, JSON.stringify(msg)); }
   tick(dt, events) {
     const g = this.g; this.snapT -= dt; this.meT -= dt; this.bT -= dt;
-    const viewers = [...this.conns.values()].some(c => c.role === 'view');
+    const now = performance.now();
+    // stale pads (phone locked / tab killed without close event)
+    for (const l of this.links) if (l.role === 'pad' && l.pid && now - l.lastRx > 4000) { const p = g.players.get(l.pid); if (p && (p.input.mx || p.input.my || p.input.fire)) p.input = { mx: 0, my: 0, ax: 0, ay: 0, fire: false, gx: null, gy: null }; if (now - l.lastRx > 20000) l.close(); }
+    let viewers = false; for (const l of this.links) if (l.role === 'view') { viewers = true; break; }
     if (viewers) {
       if (this.rosterDirty) { this.rosterDirty = false; this.broadcast('view', { t: 'roster', L: [...g.players.values()].map(p => [p.id, p.name, p.color, p.hair, p.style]) }); }
       if (this.bT <= 0 && g.bver !== this.lastBver) { this.bT = .2; this.lastBver = g.bver; this.broadcast('view', { t: 'B', L: [...g.buildings.values()].map(b => [b.id, BT_IDX.indexOf(b.type), b.gx, b.gy, b.tier, Math.round(b.hp), Math.round(b.max), Math.round((b.stage || 0) * 20)]) }); }
-      this.pendingEv = (this.pendingEv || []).concat(events.filter(e => !e.pid && e.e !== 'hurt'));
-      if (this.snapT <= 0) { this.snapT = 1 / 20; this.broadcast('view', this.snapshot(this.pendingEv)); this.pendingEv = []; }
+      for (const e of events) if (!e.pid && e.e !== 'hurt' && e.e !== 'sw') this.pendingEv.push(e);
+      if (this.pendingEv.length > 400) this.pendingEv.splice(0, this.pendingEv.length - 400);
+      if (this.snapT <= 0) {
+        this.snapT = 1 / 20; this.snapN = (this.snapN || 0) + 1;
+        let hasP2P = false, hasRelay = false; for (const l of this.links) if (l.role === 'view' && l.open) { if (l.relay) hasRelay = true; else hasP2P = true; }
+        if (hasRelay) { this.relayEv = (this.relayEv || []).concat(this.pendingEv); if (this.relayEv.length > 300) this.relayEv.splice(0, this.relayEv.length - 300); }
+        if (hasP2P) { const s = JSON.stringify(this.snapshot(this.pendingEv)); for (const l of this.links) if (l.role === 'view' && l.open && !l.relay && !l.busy) l.sendStr(s); }
+        if (hasRelay && this.snapN % 3 === 0) { const s = JSON.stringify(this.snapshot(this.relayEv)); this.relayEv = []; for (const l of this.links) if (l.role === 'view' && l.open && l.relay) l.sendStr(s); }
+        this.pendingEv = [];
+      }
+    } else this.pendingEv.length = 0;
+    // personal events → pads
+    for (const l of this.links) {
+      if (l.role !== 'pad' || !l.pid || !l.open) continue;
+      const mine = events.filter(e => (e.pid === l.pid) || (!e.pid && (e.e === 'phase' || e.e === 'intel' || e.e === 'over' || e.e === 'msg' || e.e === 'boss')));
+      if (mine.length) l.send({ t: 'ev', E: mine.slice(-30) });
     }
-    // personal states to pads
-    const personal = events.filter(e => e.pid || e.e === 'hurt' || e.e === 'phase' || e.e === 'intel' || e.e === 'over' || e.e === 'sw' || (e.e === 'msg' && !e.pid));
-    for (const c of this.conns.values()) {
-      if (c.role !== 'pad' || !c.pid || !c.conn.open) continue;
-      const mine = personal.filter(e => !e.pid || e.pid === c.pid);
-      if (mine.length) { try { c.conn.send({ t: 'ev', E: mine }); } catch (e) { } }
-    }
-    if (this.meT <= 0) { this.meT = 1 / 8; for (const c of this.conns.values()) if (c.role === 'pad' && c.pid && c.conn.open) { const p = g.players.get(c.pid); if (p) try { c.conn.send(this.meState(p)); } catch (e) { } } }
+    if (this.meT <= 0) { this.meT = 1 / 8; for (const l of this.links) if (l.role === 'pad' && l.pid && l.open) { const p = g.players.get(l.pid); if (p) l.send(this.meState(p)); } }
   }
   meState(p) {
     const g = this.g;
-    return { t: 'me', hp: Math.ceil(p.hp), max: p.max, hu: Math.round(p.hunger), am: Math.floor(p.ammo), weps: p.weps, wi: p.wi, items: p.items, isel: p.itemSel, bsel: p.buildSel, res: RES.map(k => Math.floor(g.res[k])), wv: g.wave, ph: g.phase, pt: Math.round(g.phaseT), dl: Math.round(g.dayLen), pc: p.perkChoice, dead: p.dead, rt: Math.ceil(p.respawnT || 0), wm: p.wmod, ct: g.coreTier, gh: p.ghost ? (p.ghost.ok ? 1 : 0) : -1, perks: p.perks, kills: p.kills, color: p.color, name: p.name, ae: p.autoEat, adr: p.adrenT > 0 };
+    return { t: 'me', hp: Math.ceil(p.hp), max: p.max, hu: Math.round(p.hunger), am: Math.floor(p.ammo), weps: p.weps, wi: p.wi, items: p.items, isel: p.itemSel, bsel: p.buildSel, res: RES.map(k => Math.floor(g.res[k])), wv: g.wave, ph: g.phase, pt: Math.round(g.phaseT), dl: Math.round(g.dayLen), pc: p.perkChoice, dead: p.dead, rt: Math.ceil(p.respawnT || 0), wm: p.wmod, ct: g.coreTier, gh: p.ghost ? (p.ghost.ok ? 1 : 0) : -1, kills: p.kills, color: p.color, name: p.name, adr: p.adrenT > 0, arch: g.teamPerks.arch || 0, started: !!App.started };
   }
   snapshot(E) {
     const g = this.g;
+    // keep packets lean: drop cosmetic events if the burst is huge
+    if (E.length > 160) E = E.filter(e => e.e !== 'dmg' && !(e.e === 'pj' && e.k === 'flame') && !(e.e === 's' && (e.n === 'groan' || e.n === 'flame' || e.n === 'smg')));
+    for (const e of E) if (e.e === 'pj') { if (e.tx == null) { delete e.tx; delete e.ty; } }
     return {
-      t: 's', ph: g.phase, pt: +g.phaseT.toFixed(2), dl: g.dayLen, wv: g.wave, bm: g.bloodMoon ? 1 : 0, fog: g.fog ? 1 : 0, ct: g.coreTier, mut: g.mut,
+      t: 's', ph: g.phase, pt: +g.phaseT.toFixed(2), dl: g.dayLen, wv: g.wave, bm: g.bloodMoon ? 1 : 0, fog: g.fog ? 1 : 0, ct: g.coreTier, mut: g.mut, st: App.started ? 1 : 0,
       res: RES.map(k => Math.floor(g.res[k])),
       P: [...g.players.values()].map(p => [p.id, Math.round(p.x), Math.round(p.y), Math.round(p.ang * 100), Math.ceil(p.hp), p.max, WT_ORDER.indexOf(p.weps[p.wi]), (p.dead ? 1 : 0) | (p.firing ? 2 : 0) | (p.hurtT > 0 ? 4 : 0) | (p.invT > 0 ? 8 : 0), Math.round(p.swing * 10), Math.round(p.mv * 10), p.ghost ? p.ghost.gx : -1, p.ghost ? p.ghost.gy : -1, p.ghost ? BT_IDX.indexOf(p.ghost.k) : -1, p.ghost ? (p.ghost.ok ? 1 : 0) | (p.ghost.afford ? 2 : 0) : 0, Math.ceil(p.respawnT || 0), p.kills, Math.round(p.score)]),
-      Z: g.zombies.map(z => [z.id, ZT_KEYS.indexOf(z.k), Math.round(z.x), Math.round(z.y), Math.max(0, Math.round(z.hp / z.max * 100)), (z.under ? 1 : 0) | (z.flash > 0 ? 2 : 0) | (z.burn > 0 ? 4 : 0) | (z.buffT > 0 ? 8 : 0) | (z.charge > 0 ? 16 : 0), z.face || 1]),
+      Z: g.zombies.map(z => [z.id, ZT_KEYS.indexOf(z.k), Math.round(z.x), Math.round(z.y), Math.max(0, Math.round(z.hp / z.max * 100)), (z.under ? 1 : 0) | (z.flash > 0 ? 2 : 0) | (z.burn > 0 ? 4 : 0) | (z.buffT > 0 ? 8 : 0) | (z.charge > 0 ? 16 : 0) | (z.hunt ? 32 : 0), z.face || 1]),
       K: g.pickups.map(k => [k.id, PK_IDX.indexOf(k.k), Math.round(k.x), Math.round(k.y)]),
       E
     };
   }
-  get counts() { let pads = 0, views = 0; for (const c of this.conns.values()) { if (c.role === 'pad') pads++; if (c.role === 'view') views++; } return { pads, views }; }
+  get counts() { let pads = 0, views = 0; for (const l of this.links) { if (l.role === 'pad') pads++; if (l.role === 'view') views++; } return { pads, views }; }
+}
+
+// ---------- shared client connection (viewer + pad): P2P first, relay fallback, auto-reconnect ----------
+class ClientNet {
+  constructor(code, name, role, h) {
+    this.code = code; this.name = name; this.role = role; this.h = h; this.link = null; this.peer = null; this.mq = null; this.ok = false; this.tries = 0; this.fails = 0; this.rtt = 0; this.dead = false;
+    this.mode = (QS.get('relay') === '1' || !hasPeer()) ? 'relay' : 'p2p'; this.brokerI = 0;
+    if (!hasPeer() && !hasMqtt()) { h.err('Library jaringan gagal dimuat. Pastikan internet aktif lalu muat ulang.'); return; }
+    if (!window.RTCPeerConnection && hasMqtt()) this.mode = 'relay';
+    this.connect();
+    this.hb = setInterval(() => this.heartbeat(), 1000);
+  }
+  get relay() { return this.mode === 'relay'; }
+  cleanup() {
+    const L = this.link; this.link = null; if (L) { try { L.close(); } catch (e) { } }
+    if (this.peer) { try { this.peer.destroy(); } catch (e) { } this.peer = null; }
+    if (this.mq) { const m = this.mq; this.mq = null; setTimeout(() => { try { m.end(true); } catch (e) { } }, 300); }
+  }
+  connect() {
+    if (this.dead) return; this.tries++; this.ok = false; this.cleanup(); this.startT = performance.now();
+    this.h.status && this.h.status('connecting', this.tries, this.mode);
+    if (this.mode === 'relay') this.connectRelay(); else this.connectP2P();
+  }
+  bindLink(L) {
+    this.link = L;
+    L.on('data', d => {
+      if (L !== this.link) return;
+      if (d.t === 'pong') { this.rtt = Math.round(performance.now() - d.ts); return; }
+      if (d.t === 'welcome') { this.ok = true; this.everOk = true; this.tries = 0; this.fails = 0; this.h.status && this.h.status('ok', 0, this.mode); }
+      if (d.t === 'full') { this.dead = true; this.h.err('Room penuh (maks 8 pemain).'); return; }
+      this.h.data(d);
+    });
+    L.on('close', why => { if (L !== this.link || this.dead) return; if (this.ok) { this.h.status && this.h.status('lost', 0, this.mode); this.retry(why); } else this.fail(why); });
+  }
+  connectP2P() {
+    let peer; try { peer = new Peer(undefined, peerOpts()); } catch (e) { this.fail('peer-ctor'); return; }
+    this.peer = peer;
+    peer.on('open', () => {
+      if (peer !== this.peer) return;
+      const conn = peer.connect(PEER_PREFIX + this.code, { reliable: true, serialization: 'raw', metadata: { role: this.role } });
+      if (!conn) { this.fail('conn-null'); return; }
+      const L = new Link(conn); this.bindLink(L);
+      L.on('open', () => L.send({ t: 'hello', role: this.role, name: this.name }));
+    });
+    peer.on('error', e => {
+      if (peer !== this.peer) return; const t = e && e.type; console.warn('[net] client p2p error', t);
+      if (['peer-unavailable', 'network', 'server-error', 'socket-error', 'socket-closed', 'disconnected', 'webrtc', 'browser-incompatible'].includes(t)) this.fail(t);
+    });
+  }
+  connectRelay() {
+    const url = RELAY_BROKERS[this.brokerI % RELAY_BROKERS.length]; let c;
+    try { c = mqttClient(url, false); } catch (e) { this.fail('mqtt-ctor'); return; }
+    this.mq = c; const cid = Math.random().toString(36).slice(2, 10), inT = RELAY_ROOT + this.code + '/c/' + cid;
+    const L = new RelayLink(c, RELAY_ROOT + this.code + '/h', cid); this.bindLink(L);
+    c.on('connect', () => { if (c !== this.mq) return; c.subscribe(inT, { qos: 0 }, () => L.send({ t: 'hello', role: this.role, name: this.name })); });
+    c.on('message', (topic, payload) => { if (topic !== inT || c !== this.mq) return; const str = payloadStr(payload), nl = str.indexOf('\n'); if (nl >= 0) L._rxStr(str.slice(nl + 1)); });
+    c.on('close', () => { if (c === this.mq) L._close('mqtt-close'); });
+    c.on('error', e => console.warn('[relay] client', url, e && e.message));
+  }
+  // a failed attempt: alternate P2P <-> relay so one of them gets through
+  fail(why) {
+    if (this.dead || this.retryT) return; this.fails++;
+    if (hasMqtt() && hasPeer() && window.RTCPeerConnection && QS.get('relay') !== '1') { if (this.mode === 'p2p') this.mode = 'relay'; else { this.brokerI++; if (this.brokerI % RELAY_BROKERS.length === 0) this.mode = 'p2p'; } }
+    else if (this.mode === 'relay') this.brokerI++;
+    if (this.fails === 4 && !this.everOk) this.h.status && this.h.status('slow', this.tries, this.mode);
+    if (this.fails >= 9 && !this.everOk) { this.dead = true; this.cleanup(); this.h.err('Tidak bisa menemukan room ' + this.code + '. Pastikan kode benar, laptop host masih membuka room, dan internet aktif.'); return; }
+    this.schedule(why);
+  }
+  retry(why) { if (this.dead || this.retryT) return; this.ok = false; this.schedule(why); }
+  schedule(why) {
+    const delay = this.everOk ? Math.min(4000, 600 + this.tries * 500) : 400;
+    this.h.status && this.h.status('retry', this.tries, this.mode, why);
+    this.retryT = setTimeout(() => { this.retryT = null; this.connect(); }, delay);
+  }
+  heartbeat() {
+    if (this.dead) return; const L = this.link, now = performance.now();
+    if (this.ok && L && L.open) { L.send({ t: 'ping', ts: now }); if (now - L.lastRx > (this.relay ? 9000 : 6000)) { this.h.status && this.h.status('lost', 0, this.mode); this.ok = false; this.retry('stale'); } }
+    else if (!this.ok && !this.retryT && now - this.startT > (this.mode === 'p2p' ? 8000 : 9000)) this.fail('timeout');
+  }
+  send(o) { if (this.ok && this.link && this.link.open) this.link.send(o); }
 }
 
 // ---------- VIEWER (other laptops) ----------
 class ViewState {
   constructor(seed) {
-    const w = genWorld(seed); this.nodes = w.nodes; this.isView = true;
+    const w = genWorld(seed); this.nodes = w.nodes; this.isView = true; this.seed = seed;
     this.buildings = new Map(); this.players = new Map(); this.zombies = []; this.zmap = new Map(); this.pickups = []; this.kmap = new Map(); this.roster = {};
-    this.phase = 'day'; this.phaseT = 0; this.dayLen = 85; this.wave = 0; this.res = { wood: 0, stone: 0, gold: 0, food: 0, scrap: 0 }; this.bloodMoon = false; this.fog = false; this.coreTier = 1; this.mut = {}; this.lastSnap = performance.now();
+    this.phase = 'day'; this.phaseT = 0; this.dayLen = 85; this.wave = 0; this.res = { wood: 0, stone: 0, gold: 0, food: 0, scrap: 0 }; this.bloodMoon = false; this.fog = false; this.coreTier = 1; this.mut = {}; this.started = false;
     this.core = { hp: 1, max: 1 };
   }
-  applyRoster(L) { this.roster = {}; for (const r of L) this.roster[r[0]] = { name: r[1], color: r[2], hair: r[3], style: r[4] }; for (const [id, p] of this.players) { const r = this.roster[id]; if (r) Object.assign(p, r); else this.players.delete(id); } }
+  applyRoster(L) { this.roster = {}; for (const r of L) this.roster[r[0]] = { name: r[1], color: r[2], hair: r[3], style: r[4] }; for (const [id, p] of this.players) { const r = this.roster[id]; if (r) Object.assign(p, r); } }
   applyB(L) {
     const seen = new Set();
     for (const r of L) {
-      const [id, ti, gx, gy, tier, hp, max, st] = r, type = BT_IDX[ti], sz = type === 'core' ? 2 : 1; seen.add(id);
+      const [id, ti, gx, gy, tier, hp, max, st] = r, type = BT_IDX[ti]; if (!type) continue; const sz = type === 'core' ? 2 : 1; seen.add(id);
       let b = this.buildings.get(id); if (!b) { b = { id, type, gx, gy, sz, x: (gx + sz / 2) * TS, y: (gy + sz / 2) * TS, ang: -Math.PI / 2 }; this.buildings.set(id, b); }
       if (b.hp != null && hp < b.hp) b.hitT = .15; b.tier = tier; b.hp = hp; b.max = max; b.stage = st / 20;
       if (type === 'core') this.core = b;
@@ -1772,29 +2016,29 @@ class ViewState {
     for (const id of [...this.buildings.keys()]) if (!seen.has(id)) this.buildings.delete(id);
   }
   applySnap(s) {
-    this.phase = s.ph; this.phaseT = s.pt; this.dayLen = s.dl; this.wave = s.wv; this.bloodMoon = !!s.bm; this.fog = !!s.fog; this.coreTier = s.ct; this.mut = s.mut || {};
-    RES.forEach((k, i) => this.res[k] = s.res[i]); this.lastSnap = performance.now();
+    this.phase = s.ph; this.phaseT = s.pt; this.dayLen = s.dl; this.wave = s.wv; this.bloodMoon = !!s.bm; this.fog = !!s.fog; this.coreTier = s.ct; this.mut = s.mut || {}; this.started = !!s.st;
+    RES.forEach((k, i) => this.res[k] = s.res[i] || 0);
     const seenP = new Set();
     for (const r of s.P) {
       const id = r[0]; seenP.add(id); let p = this.players.get(id);
-      if (!p) { p = Object.assign({ id, x: r[1], y: r[2], name: '?', color: '#fff', hair: '#333', style: 0 }, this.roster[id] || {}); this.players.set(id, p); }
-      p.tx = r[1]; p.ty = r[2]; p.ang = r[3] / 100; p.hp = r[4]; p.max = r[5]; p.wep = WT_ORDER[r[6]]; p.dead = !!(r[7] & 1); p.firing = !!(r[7] & 2); p.hurtT = r[7] & 4 ? .2 : 0; p.invT = r[7] & 8 ? .5 : 0;
-      if (r[8] > p._sw) p.swing = r[8] / 10; p._sw = r[8]; p.mv = r[9] / 10;
+      if (!p) { p = Object.assign({ id, x: r[1], y: r[2], name: '?', color: '#fff', hair: '#333', style: 0, swing: 0, _sw: 0 }, this.roster[id] || {}); this.players.set(id, p); }
+      p.tx = r[1]; p.ty = r[2]; p.ang = r[3] / 100; p.hp = r[4]; p.max = r[5]; p.wep = WT_ORDER[r[6]] || 'pickaxe'; p.dead = !!(r[7] & 1); p.firing = !!(r[7] & 2); p.hurtT = r[7] & 4 ? .2 : 0; p.invT = r[7] & 8 ? .5 : 0;
+      if (r[8] > (p._sw || 0)) p.swing = r[8] / 10; p._sw = r[8]; p.mv = r[9] / 10;
       p.ghost = r[10] >= 0 ? { gx: r[10], gy: r[11], k: BT_IDX[r[12]], ok: !!(r[13] & 1), afford: !!(r[13] & 2) } : null; p.respawnT = r[14]; p.kills = r[15]; p.score = r[16];
       if (Math.abs(p.x - p.tx) > 300 || Math.abs(p.y - p.ty) > 300) { p.x = p.tx; p.y = p.ty; }
     }
     for (const id of [...this.players.keys()]) if (!seenP.has(id)) this.players.delete(id);
     const seen = new Set();
     for (const r of s.Z) {
-      const id = r[0]; seen.add(id); let z = this.zmap.get(id);
-      if (!z) { z = { id, k: ZT_KEYS[r[1]], x: r[2], y: r[3], vx: 0, vy: 0, r: ZT[ZT_KEYS[r[1]]].r, max: 100 }; z.boss = !!ZT[z.k].boss; this.zmap.set(id, z); }
-      z.vx = (r[2] - (z.tx ?? r[2])) * 20; z.vy = (r[3] - (z.ty ?? r[3])) * 20; z.tx = r[2]; z.ty = r[3];
-      if (r[4] < z.hp) z.flash = .1; z.hp = r[4]; const f = r[5]; z.under = !!(f & 1); if (f & 2) z.flash = .1; z.burn = f & 4 ? 1 : 0; z.buffT = f & 8 ? 1 : 0; z.charge = f & 16 ? 1 : 0; z.face = r[6];
+      const id = r[0], k = ZT_KEYS[r[1]]; if (!k) continue; seen.add(id); let z = this.zmap.get(id);
+      if (!z) { z = { id, k, x: r[2], y: r[3], tx: r[2], ty: r[3], vx: 0, vy: 0, r: ZT[k].r, max: 100, hp: 100, face: 1 }; z.boss = !!ZT[k].boss; this.zmap.set(id, z); }
+      z.vx = (r[2] - z.tx) * 20; z.vy = (r[3] - z.ty) * 20; z.tx = r[2]; z.ty = r[3];
+      if (r[4] < z.hp) z.flash = .1; z.hp = r[4]; const f = r[5]; z.under = !!(f & 1); if (f & 2) z.flash = .1; z.burn = f & 4 ? 1 : 0; z.buffT = f & 8 ? 1 : 0; z.charge = f & 16 ? 1 : 0; z.hunt = !!(f & 32); z.face = r[6];
     }
     for (const id of [...this.zmap.keys()]) if (!seen.has(id)) this.zmap.delete(id);
     this.zombies = [...this.zmap.values()];
     const seenK = new Set();
-    for (const r of s.K) { seenK.add(r[0]); let k = this.kmap.get(r[0]); if (!k) { k = { id: r[0], k: PK_IDX[r[1]], x: r[2], y: r[3] }; this.kmap.set(r[0], k); } k.tx = r[2]; k.ty = r[3]; }
+    for (const r of s.K) { seenK.add(r[0]); let k = this.kmap.get(r[0]); if (!k) { k = { id: r[0], k: PK_IDX[r[1]] || 'gold', x: r[2], y: r[3] }; this.kmap.set(r[0], k); } k.tx = r[2]; k.ty = r[3]; }
     for (const id of [...this.kmap.keys()]) if (!seenK.has(id)) this.kmap.delete(id);
     this.pickups = [...this.kmap.values()];
   }
@@ -1808,48 +2052,37 @@ class ViewState {
   }
 }
 class ViewNet {
-  constructor(code, name, onWelcome, onErr) {
-    this.state = null; this.code = code; this.name = name;
-    if (!hasPeer()) { onErr('PeerJS gagal dimuat. Pastikan internet aktif.'); return; }
-    const peer = new Peer(undefined, PEER_OPTS); this.peer = peer;
-    peer.on('open', () => {
-      const conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'json' }); this.conn = conn;
-      conn.on('open', () => conn.send({ t: 'hello', role: 'view', name }));
-      conn.on('data', d => {
-        if (d.t === 'welcome') { this.state = new ViewState(d.seed); onWelcome(this.state); }
+  constructor(code, name, onWelcome, onErr, onStatus) {
+    this.state = null;
+    this.c = new ClientNet(code, name, 'view', {
+      err: onErr, status: onStatus,
+      data: d => {
+        if (d.t === 'welcome') { if (!this.state || this.state.seed !== d.seed) { this.state = new ViewState(d.seed); onWelcome(this.state); } }
         else if (!this.state) return;
         else if (d.t === 'roster') this.state.applyRoster(d.L);
         else if (d.t === 'B') this.state.applyB(d.L);
-        else if (d.t === 's') { this.state.applySnap(d); this.onEvents && this.onEvents(d.E); }
-      });
-      conn.on('close', () => onErr('Koneksi ke host terputus.'));
+        else if (d.t === 's') { this.state.applySnap(d); this.onEvents && this.onEvents(d.E || []); }
+      }
     });
-    peer.on('error', e => onErr(e.type === 'peer-unavailable' ? 'Room ' + code + ' tidak ditemukan.' : 'Error jaringan: ' + e.type));
   }
+  get rtt() { return this.c.rtt; }
+  get mode() { return this.c.mode; }
 }
 // ---------- PAD (phone controller) ----------
 class PadNet {
   constructor(code, name, h) {
-    this.h = h; this.code = code; this.name = name; this.connected = false; this.lastIn = ''; this.lastSend = 0;
-    if (!hasPeer()) { h.err('PeerJS gagal dimuat. Pastikan internet aktif.'); return; }
-    this.connect();
+    this.lastIn = ''; this.lastSend = 0;
+    this.c = new ClientNet(code, name, 'pad', { err: h.err, status: h.status, data: d => { if (d.t === 'welcome') h.welcome(d); else if (d.t === 'me') h.me(d); else if (d.t === 'ev') h.ev(d.E || []); } });
   }
-  connect() {
-    const peer = new Peer(undefined, PEER_OPTS); this.peer = peer;
-    peer.on('open', () => {
-      const conn = peer.connect(PEER_PREFIX + this.code, { reliable: true, serialization: 'json' }); this.conn = conn;
-      conn.on('open', () => { this.connected = true; conn.send({ t: 'hello', role: 'pad', name: this.name }); });
-      conn.on('data', d => { if (d.t === 'welcome') this.h.welcome(d); else if (d.t === 'me') this.h.me(d); else if (d.t === 'ev') this.h.ev(d.E); else if (d.t === 'full') this.h.err('Room penuh (maks 8 pemain).'); });
-      conn.on('close', () => { this.connected = false; this.h.lost(); });
-    });
-    peer.on('error', e => this.h.err(e.type === 'peer-unavailable' ? 'Room ' + this.code + ' tidak ditemukan. Cek kode di laptop.' : 'Error jaringan: ' + e.type));
-  }
+  get connected() { return this.c.ok; }
+  get mode() { return this.c.mode; }
+  get rtt() { return this.c.rtt; }
   sendInput(inp) {
-    if (!this.connected) return; const s = JSON.stringify(inp), now = performance.now();
-    if (s === this.lastIn && now - this.lastSend < 250) return; this.lastIn = s; this.lastSend = now;
-    try { this.conn.send(Object.assign({ t: 'in' }, inp)); } catch (e) { }
+    if (!this.c.ok) return; const s = JSON.stringify(inp), now = performance.now();
+    if (s === this.lastIn && now - this.lastSend < 250) return; if (this.c.relay && now - this.lastSend < 60) return; this.lastIn = s; this.lastSend = now;
+    this.c.send(Object.assign({ t: 'in' }, inp));
   }
-  act(a) { if (this.connected) try { this.conn.send(Object.assign({ t: 'act' }, a)); } catch (e) { } }
+  act(a) { this.c.send(Object.assign({ t: 'act' }, a)); }
 }
 
 // ===== Dialogs: SweetAlert2 (glass skin) with built-in fallback =====
@@ -1912,7 +2145,8 @@ function showHelp() {
     <b>🧠 AI Director:</b> horde membaca kebiasaan tim (banyak tembok, bergerombol, senjata favorit...) lalu menyesuaikan jenis zombie, sisi serangan, dan <b>bermutasi</b> melawan damage yang paling sering kalian pakai.<br>
     <b>⭐ Perk:</b> tiap pagi tiap pemain memilih 1 dari 3 perk.<br>
     <b>📱 HP:</b> stik kiri = gerak, stik kanan = bidik & serang otomatis. Tombol: ganti senjata, item, build, craft, makan.<br>
-    <b>⌨ Keyboard:</b> WASD gerak • Mouse bidik/klik serang • 1-9,0,-,= pilih bangunan lalu klik untuk pasang • Klik kanan/Esc batal • Q ganti senjata • F pakai item • T ganti item • E makan • U upgrade • X jual • C crafting • M musik.<br>
+    <b>⌨ Keyboard:</b> WASD gerak • Mouse bidik/klik serang • 1-9,0,-,= pilih bangunan lalu klik untuk pasang • Klik kanan/Esc batal • Q ganti senjata • F pakai item • T ganti item • E makan • U upgrade • X jual • C crafting • M musik • N suara.<br>
+    <b>🌐 Online:</b> HP & laptop teman tersambung langsung (P2P). Kalau jaringan memblokir (data seluler/Wi-Fi kampus), game otomatis pindah ke <b>mode relay</b>. Biarkan tab host tetap terbuka di depan.<br>
     <b>💡 Tips:</b> Upgrade Generator untuk membuka tier bangunan lebih tinggi. Ladang dipanen otomatis saat diinjak. Supply drop 📦 muncul siang hari.</div>`
   });
 }
@@ -1922,8 +2156,7 @@ function setupWorld() {
   initSprites(); App.R = new Renderer($('#cv'));
   App.game = new Game((Math.random() * 1e9) | 0); App.view = App.game;
   $('#menu').classList.add('hidden'); $('#hud').classList.remove('hidden');
-  fillIcons($('#hud')); $('#bMusic').innerHTML = gicon('music', 20); $('#bHelp2').innerHTML = gicon('brain', 20);
-  $('#bMusic').onclick = () => toast(SFX.toggleMusic() ? 'Musik ON' : 'Musik OFF'); $('#bHelp2').onclick = showHelp;
+  fillIcons($('#hud')); setupHudButtons();
   loop();
 }
 function startSolo() { App.mode = 'solo'; setupWorld(); addLocal(store.get('nh_name', '') || 'Kamu'); App.started = true; setupKeyboard(); }
@@ -1942,12 +2175,14 @@ function startHost() {
   $('#bStart').onclick = () => { if (!App.game.players.size) { Dlg.fire({ icon: 'info', title: 'Belum ada pemain', html: 'Sambungkan HP sebagai controller, atau klik <b>+ Pemain keyboard</b>.' }); return; } App.started = true; $('#lobby').classList.add('hidden'); $('#bStart').innerHTML = gicon('play') + 'LANJUT'; SFX.play('day'); };
   $('#bLobbyClose').onclick = () => { if (App.started) $('#lobby').classList.add('hidden'); else toast('Klik MULAI untuk memulai', 'info'); };
   $('#roomChip').onclick = () => { $('#lobby').classList.remove('hidden'); renderLobby(); };
+  try { const t = JSON.parse(store.get('nh_turn', 'null')); if (t) { $('#tUrl').value = t.urls || ''; $('#tUser').value = t.username || ''; $('#tPass').value = t.credential || ''; } } catch (e) { }
+  $('#tSave').onclick = () => { const urls = $('#tUrl').value.trim(); store.set('nh_turn', urls ? JSON.stringify({ urls, username: $('#tUser').value.trim(), credential: $('#tPass').value.trim() }) : 'null'); App.net && App.net.setTurn(); toast(urls ? 'TURN disimpan — berlaku untuk koneksi berikutnya' : 'TURN dihapus', 'good'); };
 }
 function addLocal(name) { const g = App.game; App.localId = 'local'; g.addPlayer('local', name, 0); if (App.net) { App.net.localIdx = 1; App.net.rosterDirty = true; } $('#hotbar').classList.remove('hidden'); $('#kbStats').classList.remove('hidden'); $('#kbInfo').classList.remove('hidden'); buildHotbar(); }
 function renderLobby() {
   const g = App.game; const ps = [...g.players.values()];
   $('#plist').innerHTML = ps.length ? ps.map(p => `<span class="pchip"><i style="background:${p.color}"></i>${esc(p.name)} ${p.id === 'local' ? icon('key', 14) : icon('phone', 14)}</span>`).join('') : '<span style="opacity:.6">Menunggu controller...</span>';
-  if (App.net) { const c = App.net.counts; $('#netCount').textContent = `(${c.pads} HP • ${c.views} layar)`; }
+  if (App.net) { const c = App.net.counts; $('#netCount').textContent = `(${c.pads} HP • ${c.views} layar)`; const st = App.net.status; $('#netStatus').innerHTML = st === 'online' ? '<span style="color:#7bd88f">● Room online (' + App.net.modeLabel + ')</span> — HP & laptop teman bisa bergabung kapan saja, termasuk saat game berjalan.' : st === 'reconnecting' ? '<span style="color:#ffd43b">● Menyambung ulang ke server...</span>' : st === 'error' || st === 'nolib' ? '<span style="color:#ff5d73">● Offline</span>' : '● Menyiapkan room...'; }
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function restartHost() {
@@ -1962,13 +2197,15 @@ function restartHost() {
 // ================= VIEWER =================
 function startView(code, name) {
   App.mode = 'view'; initSprites(); App.R = new Renderer($('#cv'));
-  $('#menu').classList.add('hidden'); $('#hud').classList.remove('hidden'); fillIcons($('#hud'));
-  $('#bMusic').innerHTML = gicon('music', 20); $('#bHelp2').innerHTML = gicon('brain', 20); $('#bMusic').onclick = () => toast(SFX.toggleMusic() ? 'Musik ON' : 'Musik OFF'); $('#bHelp2').onclick = showHelp;
+  $('#menu').classList.add('hidden'); $('#hud').classList.remove('hidden'); fillIcons($('#hud')); setupHudButtons();
   toast('Menghubungkan ke room ' + code + '...');
-  App.followName = name;
-  App.net = new ViewNet(code, name, st => { App.view = st; FX.projs.clear(); toast('Tersambung! Kamera mengikuti "' + name + '" (sambungkan HP dengan nama yang sama)', 'good'); }, err => Dlg.fire({ icon: 'error', title: 'Koneksi', text: err, confirmButtonText: 'Muat ulang' }).then(() => location.reload()));
+  App.followName = name; App.viewCode = code; App.netStatus = 'connecting';
+  App.net = new ViewNet(code, name,
+    st => { App.view = st; FX.projs.clear(); FX.parts.length = 0; toast('Tersambung! Kamera mengikuti "' + esc(name) + '" (pakai nama yang sama di HP)', 'good'); SFX.play('perk'); },
+    err => Dlg.fire({ icon: 'error', title: 'Koneksi', text: err, confirmButtonText: 'Muat ulang' }).then(() => location.reload()),
+    (st, n) => { App.netStatus = st; if (st === 'lost') toast('Koneksi ke host terputus, menyambung ulang...', 'warn'); else if (st === 'ok' && n !== undefined) { } else if (st === 'slow') toast(netTip(), 'warn'); });
   App.net.onEvents = E => handleEvents(E);
-  $('#roomChip').classList.remove('hidden'); $('#roomChip').innerHTML = icon('monitor', 18) + ' LAYAR • ' + code;
+  $('#roomChip').classList.remove('hidden'); $('#roomChip').onclick = null;
   loop();
 }
 
@@ -2032,7 +2269,7 @@ function updateHUD(V) {
   const night = V.phase === 'night';
   $('#waveNum').textContent = 'WAVE ' + V.wave;
   $('#phaseIco').innerHTML = gicon(night ? 'moon' : 'sun', 22);
-  if (V.phase === 'day') { const left = Math.max(0, Math.ceil(V.dayLen - V.phaseT)); $('#phaseTxt').innerHTML = (App.started || App.mode === 'view' ? `Siang • malam dalam <b>${left}s</b>` : 'Menunggu host mulai...') + (V.bloodMoon ? ' • <span style="color:#ff4d6d">BLOOD MOON</span>' : ''); $('#dayBar>i').style.left = (clamp(V.phaseT / V.dayLen, 0, 1) * 70) + '%'; }
+  if (V.phase === 'day') { const left = Math.max(0, Math.ceil(V.dayLen - V.phaseT)); $('#phaseTxt').innerHTML = ((App.mode === 'view' ? V.started : App.started) ? `Siang • malam dalam <b>${left}s</b>` : 'Menunggu host mulai...') + (V.bloodMoon ? ' • <span style="color:#ff4d6d">BLOOD MOON</span>' : ''); $('#dayBar>i').style.left = (clamp(V.phaseT / V.dayLen, 0, 1) * 70) + '%'; }
   else if (night) { $('#phaseTxt').innerHTML = `MALAM • <b>${V.zombies.length}</b> zombie${V.fog ? ' • 🌫' : ''}${V.bloodMoon ? ' • 🩸' : ''}`; $('#dayBar>i').style.left = (70 + clamp(V.phaseT / 80, 0, 1) * 29) + '%'; }
   if (V.phase === 'over') $('#phaseTxt').innerHTML = '<b style="color:#ff4d6d">GAME OVER</b>';
   $('#mutRow').innerHTML = Object.entries(V.mut || {}).map(([k, v]) => `<span title="${MUT_NAME[k]}">${MUT_NAME[k].split(' (')[0]} ${'I'.repeat(v)}</span>`).join('');
@@ -2042,8 +2279,20 @@ function updateHUD(V) {
   const c = V.core; if (c && c.max) { $('#coreBar>i').style.width = clamp(c.hp / c.max * 100, 0, 100) + '%'; $('#coreHp').textContent = Math.max(0, Math.ceil(c.hp)) + ' / ' + Math.ceil(c.max); $('#coreLbl').textContent = 'GENERATOR T' + (V.coreTier || 1); }
   const boss = V.zombies.find(z => z.boss);
   if (boss) { $('#bossBar').classList.remove('hidden'); $('#bossBar .nm').textContent = ZT[boss.k].name; $('#bossBar .bar>i').style.width = clamp(boss.hp / boss.max * 100, 0, 100) + '%'; } else $('#bossBar').classList.add('hidden');
+  if (App.mode === 'view') { const ok = App.netStatus === 'ok'; $('#roomChip').innerHTML = `${icon(ok ? 'wifi' : 'monitor', 18)} LAYAR • ${App.viewCode} • ${ok ? (App.net.c.mode === 'relay' ? 'Relay ' : 'P2P ') + App.net.rtt + 'ms' : '<span style="color:#ffd43b">menyambung' + (App.net.c.mode === 'relay' ? ' (relay)' : '') + '...</span>'}`; }
+  if (App.mode === 'host' && App.net && App.net.code) { const c = App.net.counts, st = App.net.status; $('#roomChip').innerHTML = `${icon('qr', 18)} ROOM ${App.net.code} • ${c.pads}📱 ${c.views}🖥 ${st === 'online' ? '' : '<span style="color:#ffd43b">' + (st === 'reconnecting' ? 'menyambung...' : st) + '</span>'}`; }
+  if (App.mode === 'host' && !$('#lobby').classList.contains('hidden')) renderLobby();
   if (App.localId) updateKbHUD(V.players.get(App.localId));
 }
+function setupHudButtons() {
+  const upd = () => { $('#bMusic').innerHTML = gicon(SFX.musicOn ? 'music' : 'mute', 20); $('#bSfx').innerHTML = gicon(SFX.sfxOn ? 'speaker' : 'mute', 20); };
+  if (!$('#bSfx')) { const b = document.createElement('button'); b.id = 'bSfx'; b.title = 'Suara (N)'; $('#hudBtns').prepend(b); }
+  $('#bHelp2').innerHTML = gicon('brain', 20); upd();
+  $('#bMusic').onclick = () => { SFX.init(); toast(SFX.toggleMusic() ? 'Musik ON' : 'Musik OFF'); upd(); };
+  $('#bSfx').onclick = () => { SFX.init(); toast(SFX.toggleSfx() ? '🔊 Suara ON' : '🔇 Suara OFF'); upd(); };
+  $('#bHelp2').onclick = showHelp; App.updSoundBtns = upd;
+}
+function netTip() { return 'Koneksi lambat/gagal. Tips: pakai Wi-Fi/hotspot yang sama untuk HP & laptop, matikan VPN, atau isi TURN server di lobby host.'; }
 
 // ================= KEYBOARD PLAYER (on host laptop) =================
 const KB = { keys: {}, mx: 0, my: 0, down: false };
@@ -2056,7 +2305,7 @@ function setupKeyboard() {
     const hi = HOTKEYS.indexOf(k); if (hi >= 0 && BT_ORDER[hi]) { const bk = BT_ORDER[hi]; g.action(id, { a: 'build', k: p.buildSel === bk ? null : bk }); buildHotbar(); return; }
     if (k === 'escape') { g.action(id, { a: 'build', k: null }); $('#craftPanel').classList.add('hidden'); buildHotbar(); }
     if (k === 'q') g.action(id, { a: 'wep' }); if (k === 'f') g.action(id, { a: 'use' }); if (k === 't') g.action(id, { a: 'item' }); if (k === 'e') g.action(id, { a: 'eat' });
-    if (k === 'u') g.action(id, { a: 'upgrade' }); if (k === 'x') g.action(id, { a: 'sell' }); if (k === 'c') toggleCraft(); if (k === 'm') toast(SFX.toggleMusic() ? 'Musik ON' : 'Musik OFF'); if (k === 'h') showHelp();
+    if (k === 'u') g.action(id, { a: 'upgrade' }); if (k === 'x') g.action(id, { a: 'sell' }); if (k === 'c') toggleCraft(); if (k === 'm') { toast(SFX.toggleMusic() ? 'Musik ON' : 'Musik OFF'); App.updSoundBtns && App.updSoundBtns(); } if (k === 'n') { toast(SFX.toggleSfx() ? '🔊 Suara ON' : '🔇 Suara OFF'); App.updSoundBtns && App.updSoundBtns(); } if (k === 'h') showHelp();
   });
   addEventListener('keyup', e => KB.keys[e.key.toLowerCase()] = false);
   const cv = $('#cv');
@@ -2113,17 +2362,20 @@ function startPad(code, name) {
   try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => { })).catch(() => { }); } catch (e) { }
   try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { }
   padToast('Menghubungkan ke ' + code + '...');
+  PAD.code = code; PAD.status = 'connecting';
   const h = {
-    welcome: d => { padToast('Tersambung! Kamu adalah ' + name, 'good'); $('#padColor').style.background = d.color; SFX.play('perk'); vib(60); },
+    welcome: d => { padToast('Tersambung! Kamu adalah ' + esc(d.name || name), 'good'); $('#padColor').style.background = d.color; SFX.play('perk'); vib(60); },
     me: d => { PAD.me = d; padRender(d); },
-    ev: E => { for (const e of E) { if (e.e === 'msg') padToast(e.text, e.cls); else if (e.e === 'hurt') vib(40); else if (e.e === 'phase') { padToast(e.ph === 'night' ? '🌙 MALAM ' + e.wave + ' — bertahan!' : '☀ Pagi! Pilih perk', e.ph === 'night' ? 'bad' : 'good'); vib([80, 60, 80]); SFX.play(e.ph === 'night' ? 'night' : 'day'); } else if (e.e === 'over') { padToast('💀 GAME OVER — tunggu host memulai ulang', 'bad'); vib(400); } else if (e.e === 'intel') { padToast('🧠 ' + e.lines[0], 'warn'); } else if (e.e === 'sw') vib(8); } },
+    ev: E => { for (const e of E) { if (e.e === 'msg') { padToast(e.text, e.cls); if (e.pid) SFX.play(e.cls === 'warn' || e.cls === 'bad' ? 'error' : 'upgrade', .6); } else if (e.e === 'hurt') { vib(40); SFX.play('hurt', .5); } else if (e.e === 'phase') { padToast(e.ph === 'night' ? '🌙 MALAM ' + e.wave + ' — bertahan!' : '☀ Pagi! Pilih perk', e.ph === 'night' ? 'bad' : 'good'); vib([80, 60, 80]); SFX.play(e.ph === 'night' ? 'night' : 'day', .7); } else if (e.e === 'over') { padToast('💀 GAME OVER — tunggu host memulai ulang', 'bad'); vib(400); SFX.play('die', .6); } else if (e.e === 'intel') { padToast('🧠 ' + e.lines[0], 'warn'); } else if (e.e === 'boss' && e.name) { padToast('☠ ' + e.name + ' datang!', 'bad'); vib([200, 80, 200]); } else if (e.e === 'sw') vib(8); else if (e.e === 's' && e.pid) SFX.play(e.n, .6); } },
     err: m => Dlg.fire({ icon: 'error', title: 'Gagal tersambung', text: m, confirmButtonText: 'Coba lagi' }).then(() => location.reload()),
-    lost: () => { padToast('Koneksi terputus, mencoba lagi...', 'bad'); setTimeout(() => App.net.connect(), 1500); }
+    status: (st, n, mode) => { const was = PAD.status; PAD.status = st; if (st === 'ok' && was !== 'ok' && PAD.me) padToast('Tersambung kembali' + (mode === 'relay' ? ' (mode relay)' : ''), 'good'); if (st === 'lost') { padToast('Koneksi terputus, menyambung ulang...', 'bad'); vib(100); } else if (st === 'slow') padToast(netTip(), 'warn'); padNetChip(); }
   };
   App.net = new PadNet(code, name, h);
+  setInterval(padNetChip, 1000);
   setupSticks(); setupPadButtons();
   setInterval(() => App.net.sendInput(PAD.input), 33);
 }
+function padNetChip() { const el = $('#padNet'); if (!el) return; const ok = PAD.status === 'ok'; el.innerHTML = ok ? `${icon('wifi', 14)}${App.net.mode === 'relay' ? 'R·' : ''}${App.net.rtt}ms` : `<span style="color:#ffd43b">${icon('wifi', 14)}${App.net.mode === 'relay' ? 'relay' : ''}…</span>`; }
 function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } }
 function padToast(t, c = 'info') { toast(t, c, '#padMsg'); }
 function setupSticks() {
@@ -2152,11 +2404,14 @@ function setupSticks() {
 function setupPadButtons() {
   const act = a => { SFX.play('click'); vib(15); App.net.act(a); };
   $('#padBtns').innerHTML = `<button class="pb" id="pbW"></button><button class="pb" id="pbI"></button><button class="pb" id="pbB">${gicon('hammer', 20)}BANGUN</button><button class="pb" id="pbC">${gicon('craft', 20)}CRAFT</button><button class="pb" id="pbE">${gicon('eat', 20)}MAKAN</button><button class="pb" id="pbT">${gicon('swap', 20)}ITEM ⇄</button>`;
+  const top = $('#pad .top'); if (!$('#padNet')) { const n = document.createElement('div'); n.id = 'padNet'; n.className = 'stat'; top.appendChild(n); const sb = document.createElement('button'); sb.id = 'padSnd'; sb.className = 'pb'; sb.style.cssText = 'width:38px;height:34px;border-radius:10px'; top.appendChild(sb); }
+  const sndUpd = () => $('#padSnd').innerHTML = icon(SFX.sfxOn ? 'speaker' : 'mute', 18); sndUpd();
   const tap = (el, fn) => el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fn(); }, { passive: false });
   const both = (sel, fn) => { const el = $(sel); tap(el, fn); el.addEventListener('click', fn); };
   both('#pbW', () => act({ a: 'wep' })); both('#pbI', () => act({ a: 'use' })); both('#pbE', () => act({ a: 'eat' })); both('#pbT', () => act({ a: 'item' }));
   both('#pbB', () => { PAD.buildOpen = !PAD.buildOpen; if (!PAD.buildOpen) act({ a: 'build', k: null }); padRender(PAD.me, true); });
   both('#pbC', () => { const el = $('#padPanel'); el.classList.toggle('hidden'); el.dataset.sig = ''; padRender(PAD.me, true); });
+  both('#padSnd', () => { SFX.init(); SFX.toggleSfx(); sndUpd(); });
   both('#placeBtn', () => act({ a: 'place' })); both('#pUp', () => act({ a: 'upgrade' })); both('#pSell', () => act({ a: 'sell' }));
 }
 function padRender(d, force) {
